@@ -210,6 +210,11 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
         link_counts: Counter[str] = Counter()
         root_cause_counts: Counter[str] = Counter()
         case_status_counts: Counter[str] = Counter()
+        complaint_month_counts: Counter[str] = Counter()
+        complaint_dates: list[date] = []
+        job_dates = [record.install_date for record in jobs if record.install_date]
+        job_period_start = min(job_dates) if job_dates else None
+        job_period_end = max(job_dates) if job_dates else None
         for row_number, row, fields in _sheet_rows(workbook, case_contract):
             job_no = _job_no(_value(row, fields, "job_no"))
             if not job_no:
@@ -221,8 +226,11 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
             base_key = (job_no.casefold(), complaint_date)
             case_occurrences[base_key] += 1
             source_key = _hash_payload("CASE", *base_key, case_occurrences[base_key])
-            if job_no not in tech_codes_by_job:
-                link_status = CaseLinkStatus.JOB_NOT_FOUND
+            completed_date = _date(_value(row, fields, "completed_date"))
+            if job_no not in tech_codes_by_job and completed_date and job_period_start and completed_date < job_period_start:
+                link_status = CaseLinkStatus.REFERENCE_OUTSIDE_CURRENT_JOB_DATA
+            elif job_no not in tech_codes_by_job:
+                link_status = CaseLinkStatus.JOB_REFERENCE_REQUIRES_REVIEW
             elif source_tech_code and tech_codes_by_job[job_no] and source_tech_code not in tech_codes_by_job[job_no]:
                 link_status = CaseLinkStatus.TECHNICIAN_CONFLICT
             else:
@@ -230,7 +238,7 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
             root_cause_status = _text(_value(row, fields, "root_cause_status"))
             case_status = _text(_value(row, fields, "case_status"))
             values = (
-                job_no, _date(_value(row, fields, "completed_date")), complaint_date, source_tech_code,
+                job_no, completed_date, complaint_date, source_tech_code,
                 technician_id, identity_status, _text(_value(row, fields, "issue_category")),
                 _text(_value(row, fields, "issue_detail")), _text(_value(row, fields, "qc_result")),
                 root_cause_status, _text(_value(row, fields, "root_cause_type")),
@@ -243,6 +251,9 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
             link_counts[link_status.value] += 1
             root_cause_counts[root_cause_status or "(blank)"] += 1
             case_status_counts[case_status or "(blank)"] += 1
+            if complaint_date:
+                complaint_dates.append(complaint_date)
+                complaint_month_counts[complaint_date.strftime("%Y-%m")] += 1
 
         warnings_list: list[str] = []
         if duplicate_master_ids:
@@ -251,23 +262,33 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
             warnings_list.append("PWS1/PWS51 ถูกเก็บเป็นปริมาณงาน แต่ไม่สร้างโปรไฟล์หรือคะแนนรายบุคคล")
         if link_counts[CaseLinkStatus.TECHNICIAN_CONFLICT.value]:
             warnings_list.append("เคสที่ Tech ID ขัดกับ Job Data ถูกพักไว้ให้คนตรวจ และไม่นำไปให้คะแนนอัตโนมัติ")
-        if link_counts[CaseLinkStatus.JOB_NOT_FOUND.value]:
-            warnings_list.append("เคสที่ยังจับคู่ Job Data ไม่ได้จะยังคงถูกเก็บไว้ ไม่ถูกลบทิ้ง")
+        if link_counts[CaseLinkStatus.REFERENCE_OUTSIDE_CURRENT_JOB_DATA.value]:
+            warnings_list.append("เคสที่อ้างถึงงานก่อนช่วง Job Data ยังคงนับตาม Complaint Date และเก็บไว้เป็นหลักฐาน")
+        if link_counts[CaseLinkStatus.JOB_REFERENCE_REQUIRES_REVIEW.value]:
+            warnings_list.append("เคสที่ควรอยู่ในช่วง Job Data แต่ยังหา Order No. ไม่พบ ถูกพักไว้ให้ตรวจสอบ")
 
         summary = {
             "technicians": {"source_rows": master_source_rows, "unique_verified": len(technicians), "duplicate_ids": sum(duplicate_master_ids.values())},
             "jobs": {
                 "rows": len(jobs), "unique_job_numbers": len(job_number_counts),
                 "duplicate_job_numbers": sum(1 for count in job_number_counts.values() if count > 1),
+                "period_start": job_period_start.isoformat() if job_period_start else None,
+                "period_end": job_period_end.isoformat() if job_period_end else None,
                 "status": dict(job_status_counts), "technician_identity": dict(identity_counts),
                 "qc_evidence": dict(qc_evidence_counts), "qc_result": dict(qc_result_counts),
             },
             "complaints": {
                 "rows": len(cases), "link_status": dict(link_counts),
                 "root_cause_status": dict(root_cause_counts), "case_status": dict(case_status_counts),
+                "reporting_date_field": "Complaint Date",
+                "period_start": min(complaint_dates).isoformat() if complaint_dates else None,
+                "period_end": max(complaint_dates).isoformat() if complaint_dates else None,
+                "by_month": dict(sorted(complaint_month_counts.items())),
+                "missing_complaint_date": len(cases) - len(complaint_dates),
             },
             "evidence_policy": {
                 "complaint_truth_source": "Complaint Log", "missing_is_not_pass": True,
+                "complaint_reporting_date": "complaint_date",
                 "blank_cancel_qc": "NOT_APPLICABLE_CANCELLED",
                 "blank_not_complete_qc": "NOT_APPLICABLE_NOT_COMPLETE", "no_delete_on_omission": True,
             },

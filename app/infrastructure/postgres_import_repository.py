@@ -153,7 +153,11 @@ class PostgresImportRepository:
                       SELECT c.source_case_key,
                         CASE
                           WHEN NOT EXISTS (SELECT 1 FROM job_records j WHERE j.job_no = c.job_no)
-                            THEN 'JOB_NOT_FOUND'
+                            THEN CASE
+                              WHEN c.link_status IN ('REFERENCE_OUTSIDE_CURRENT_JOB_DATA', 'JOB_REFERENCE_REQUIRES_REVIEW')
+                                THEN c.link_status
+                              ELSE 'JOB_REFERENCE_REQUIRES_REVIEW'
+                            END
                           WHEN c.source_tech_code IS NOT NULL
                                AND EXISTS (SELECT 1 FROM job_records j WHERE j.job_no = c.job_no AND j.source_tech_code IS NOT NULL)
                                AND NOT EXISTS (SELECT 1 FROM job_records j WHERE j.job_no = c.job_no AND j.source_tech_code = c.source_tech_code)
@@ -173,7 +177,7 @@ class PostgresImportRepository:
                     """
                     SELECT
                       count(*) FILTER (WHERE link_status = 'TECHNICIAN_CONFLICT'),
-                      count(*) FILTER (WHERE link_status = 'JOB_NOT_FOUND')
+                      count(*) FILTER (WHERE link_status IN ('REFERENCE_OUTSIDE_CURRENT_JOB_DATA', 'JOB_REFERENCE_REQUIRES_REVIEW'))
                     FROM case_records WHERE source_case_key = ANY(%s)
                     """,
                     (case_keys,),

@@ -44,6 +44,7 @@ def build_workbook(path: Path, case_status: str = "Resolved") -> None:
     complaint.append(CASE_HEADERS)
     complaint.append(["Mall", "JOB001", datetime(2026, 1, 1), datetime(2026, 1, 5), "T002", "Two", "Workmanship", "Evidence detail", "Fail", "Confirmed", "Technician", "Cause", "Fix", None, "Yes", 1, "Vendor", case_status, datetime(2026, 1, 6)])
     complaint.append(["Mall", "OLD001", datetime(2025, 12, 1), datetime(2026, 1, 7), "T001", "One", "Product", "Old evidence", "Pass", "Pending Investigation", None, None, None, None, None, 1, "Vendor", None, None])
+    complaint.append(["Mall", "MISSING2026", datetime(2026, 1, 2), datetime(2026, 1, 8), "T001", "One", "Product", "Current evidence", "Pass", "Pending Investigation", None, None, None, None, None, 1, "Vendor", None, None])
 
     technician = workbook.create_sheet("Technician Master")
     technician.append(["Technician Master"])
@@ -93,7 +94,12 @@ class ImportContractTest(unittest.TestCase):
         self.assertEqual(by_job["JOB003"].qc_evidence_status, QCEvidenceStatus.NOT_APPLICABLE_NOT_COMPLETE)
         self.assertEqual(by_job["JOB004"].qc_evidence_status, QCEvidenceStatus.NOT_APPLICABLE_CANCELLED)
         self.assertEqual(preview.cases[0].link_status, CaseLinkStatus.TECHNICIAN_CONFLICT)
-        self.assertEqual(preview.cases[1].link_status, CaseLinkStatus.JOB_NOT_FOUND)
+        self.assertEqual(preview.cases[1].link_status, CaseLinkStatus.REFERENCE_OUTSIDE_CURRENT_JOB_DATA)
+        self.assertEqual(preview.cases[2].link_status, CaseLinkStatus.JOB_REFERENCE_REQUIRES_REVIEW)
+        self.assertEqual(preview.summary["complaints"]["reporting_date_field"], "Complaint Date")
+        self.assertEqual(preview.summary["complaints"]["period_start"], "2026-01-05")
+        self.assertEqual(preview.summary["complaints"]["period_end"], "2026-01-08")
+        self.assertEqual(preview.summary["complaints"]["by_month"], {"2026-01": 3})
 
     def test_case_key_is_stable_when_case_status_changes(self):
         with tempfile.TemporaryDirectory() as directory:

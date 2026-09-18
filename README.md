@@ -11,6 +11,7 @@ M1.1 reads the real workbook layout (`Job Data`, `Complaint Log`, and `Technicia
 Evidence-first rules:
 
 - Missing data is never converted to Pass, Fail, or “no complaint”.
+- Complaint totals and time periods always use `Complaint Date`; installation/completion dates are context only.
 - A blank QC outcome on `Cancel` or `Not Complete` is not labelled “not inspected”; it is stored as not applicable for that job status.
 - `PWS1` and `PWS51` job volume is retained, but no technician profile or individual score is created.
 - Tech IDs missing from Technician Master stay `PENDING_MASTER_MATCH`.
