@@ -18,8 +18,8 @@ class PostgresPerformanceReader:
                 cursor.execute(
                     """
                     SELECT
-                      (SELECT count(*) FROM jobs) AS jobs,
-                      (SELECT count(*) FROM service_cases) AS complaint_cases,
+                      (SELECT count(*) FROM job_records) AS jobs,
+                      (SELECT count(*) FROM case_records) AS complaint_cases,
                       (SELECT count(*) FROM actions WHERE status NOT IN ('CLOSED', 'CANCELLED')) AS open_actions,
                       (SELECT count(*) FROM evidence WHERE review_status = 'PENDING') AS pending_evidence
                     """
@@ -60,4 +60,3 @@ class PostgresPerformanceReader:
                 )
                 row = cursor.fetchone()
         return dict(row) if row else None
-

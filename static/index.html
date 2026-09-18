@@ -14,7 +14,7 @@
         <a href="#watchlist">Watchlist</a>
         <a href="#import">นำเข้าข้อมูล</a>
       </nav>
-      <p class="sidebar-note">ข้อมูลที่ขาดจะถูกแสดงว่า “รอข้อมูล” ไม่ถูกตีความว่าไม่มีปัญหา</p>
+      <p class="sidebar-note">Evidence First: ข้อมูลที่ไม่มีหลักฐานจะไม่ถูกตีความเป็น Pass, Fail หรือ “ไม่มีปัญหา”</p>
     </aside>
     <main>
       <header>
@@ -27,12 +27,11 @@
         <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>Vendor</th><th>สถานะ</th><th>Risk score</th><th>QC coverage</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
       </section>
       <section id="import" class="panel import-panel">
-        <div><p class="eyebrow">EXCEL IMPORT</p><h2>ตรวจไฟล์ก่อนนำเข้า</h2><p class="muted">ต้องมีชีท Job Data, Complaint Log และ Technician Master ระบบตรวจเฉพาะโครงสร้าง ไม่ตัดสิน Root Cause แทนคน</p></div>
-        <form id="uploadForm"><label class="upload"><input id="workbook" type="file" accept=".xlsx" required /><span>เลือกไฟล์ Excel</span></label><button type="submit">ตรวจสอบไฟล์</button></form>
+        <div><p class="eyebrow">EVIDENCE-FIRST IMPORT</p><h2>Preview ก่อนบันทึกทุกครั้ง</h2><p class="muted">ใช้ Complaint Log เป็นหลักฐานของเคส เก็บ PWS เป็นปริมาณงานแต่ไม่ให้คะแนนรายบุคคล และ Import ซ้ำจะไม่สร้างรายการซ้ำ</p></div>
+        <form id="uploadForm"><label class="upload"><input id="workbook" type="file" accept=".xlsx" required /><span id="fileLabel">เลือกไฟล์ Excel</span></label><button type="submit">สร้าง Preview</button></form>
         <div id="importResult" class="import-result" aria-live="polite"></div>
       </section>
     </main>
     <script src="/app.js"></script>
   </body>
 </html>
-

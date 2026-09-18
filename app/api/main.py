@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from zipfile import BadZipFile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from openpyxl.utils.exceptions import InvalidFileException
 
 from app.application.demo_data import dashboard_demo
 from app.application.import_contract import validate_workbook
+from app.application.workbook_import import preview_workbook
+from app.infrastructure.postgres_import_repository import PostgresImportRepository
 from app.infrastructure.postgres_reader import PostgresPerformanceReader
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = APP_ROOT / "static"
 app = FastAPI(title="TrackTech", version="0.1.0")
+MAX_WORKBOOK_BYTES = 30 * 1024 * 1024
 
 
 def _reader_data() -> dict:
@@ -47,22 +52,36 @@ def technician_profile(technician_id: str) -> dict:
     raise HTTPException(status_code=404, detail="Technician not found")
 
 
-@app.post("/api/import/validate")
-async def validate_import(file: UploadFile = File(...)) -> dict:
+@contextmanager
+def _uploaded_workbook(file: UploadFile):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="รองรับเฉพาะไฟล์ .xlsx")
     with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as temporary:
-        shutil.copyfileobj(file.file, temporary)
+        total = 0
+        while chunk := file.file.read(1024 * 1024):
+            total += len(chunk)
+            if total > MAX_WORKBOOK_BYTES:
+                Path(temporary.name).unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="ไฟล์ใหญ่เกิน 30 MB")
+            temporary.write(chunk)
         temporary_path = temporary.name
     try:
-        validation = validate_workbook(temporary_path)
+        yield Path(temporary_path)
     finally:
         Path(temporary_path).unlink(missing_ok=True)
+
+
+@app.post("/api/import/validate")
+async def validate_import(file: UploadFile = File(...)) -> dict:
+    """Backwards-compatible structure validation endpoint."""
+    with _uploaded_workbook(file) as temporary_path:
+        validation = validate_workbook(temporary_path)
     return {
         "can_import": all(item.is_valid for item in validation),
         "sheets": [
             {
                 "sheet_name": item.sheet_name,
+                "header_row": item.header_row,
                 "row_count": item.row_count,
                 "missing_columns": item.missing_columns,
                 "blank_key_rows": item.blank_key_rows,
@@ -71,6 +90,34 @@ async def validate_import(file: UploadFile = File(...)) -> dict:
             for item in validation
         ],
     }
+
+
+@app.post("/api/import/preview")
+async def preview_import(file: UploadFile = File(...)) -> dict:
+    try:
+        with _uploaded_workbook(file) as temporary_path:
+            preview = preview_workbook(temporary_path, file.filename)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except (OSError, KeyError, BadZipFile, InvalidFileException) as error:
+        raise HTTPException(status_code=400, detail="อ่านไฟล์ Excel ไม่สำเร็จ กรุณาตรวจว่าไฟล์ไม่เสียหาย") from error
+    return {"can_import": True, **preview.public_dict()}
+
+
+@app.post("/api/import/commit")
+async def commit_import(file: UploadFile = File(...)) -> dict:
+    if os.getenv("TRACKTECH_DEMO_MODE", "true").casefold() == "true":
+        raise HTTPException(
+            status_code=409,
+            detail="ตอนนี้เป็นโหมดตัวอย่าง: Preview ได้ แต่ต้องตั้งฐานข้อมูลและ TRACKTECH_DEMO_MODE=false ก่อนบันทึกจริง",
+        )
+    try:
+        with _uploaded_workbook(file) as temporary_path:
+            preview = preview_workbook(temporary_path, file.filename)
+            result = PostgresImportRepository().commit(preview)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"status": "committed", **result.as_dict()}
 
 
 @app.get("/")
@@ -84,4 +131,3 @@ def static_asset(asset_path: str) -> FileResponse:
     if STATIC_DIR not in asset.parents or not asset.is_file():
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(asset)
-
