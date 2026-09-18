@@ -100,6 +100,7 @@ class ImportContractTest(unittest.TestCase):
         self.assertEqual(preview.summary["complaints"]["period_start"], "2026-01-05")
         self.assertEqual(preview.summary["complaints"]["period_end"], "2026-01-08")
         self.assertEqual(preview.summary["complaints"]["by_month"], {"2026-01": 3})
+        self.assertTrue(any("รับเรื่องร้องเรียนในปี 2026" in warning for warning in preview.warnings))
 
     def test_case_key_is_stable_when_case_status_changes(self):
         with tempfile.TemporaryDirectory() as directory:
