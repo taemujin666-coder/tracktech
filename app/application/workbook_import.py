@@ -263,7 +263,10 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
         if link_counts[CaseLinkStatus.TECHNICIAN_CONFLICT.value]:
             warnings_list.append("เคสที่ Tech ID ขัดกับ Job Data ถูกพักไว้ให้คนตรวจ และไม่นำไปให้คะแนนอัตโนมัติ")
         if link_counts[CaseLinkStatus.REFERENCE_OUTSIDE_CURRENT_JOB_DATA.value]:
-            warnings_list.append("เคสที่อ้างถึงงานก่อนช่วง Job Data ยังคงนับตาม Complaint Date และเก็บไว้เป็นหลักฐาน")
+            warnings_list.append(
+                "งานติดตั้งก่อนช่วง Job Data (เช่น ปี 2025) แต่รับเรื่องร้องเรียนในปี 2026 "
+                "ยังนับเป็น Complaint ปี 2026 ตาม Complaint Date และเก็บไว้เป็นหลักฐาน"
+            )
         if link_counts[CaseLinkStatus.JOB_REFERENCE_REQUIRES_REVIEW.value]:
             warnings_list.append("เคสที่ควรอยู่ในช่วง Job Data แต่ยังหา Order No. ไม่พบ ถูกพักไว้ให้ตรวจสอบ")
 
