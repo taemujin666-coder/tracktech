@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrackTech</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand"><span>TT</span><div><strong>TrackTech</strong><small>Performance Tracker</small></div></div>
+      <nav>
+        <a class="active" href="#overview">ภาพรวม</a>
+        <a href="#watchlist">Watchlist</a>
+        <a href="#import">นำเข้าข้อมูล</a>
+      </nav>
+      <p class="sidebar-note">ข้อมูลที่ขาดจะถูกแสดงว่า “รอข้อมูล” ไม่ถูกตีความว่าไม่มีปัญหา</p>
+    </aside>
+    <main>
+      <header>
+        <div><p class="eyebrow">TECHNICIAN PERFORMANCE</p><h1>ภาพรวมการติดตามช่าง</h1><p class="muted">ตรวจจับความเสี่ยง ติดตาม Action และปิดเคสด้วยหลักฐาน</p></div>
+        <div id="mode" class="mode">กำลังโหลด</div>
+      </header>
+      <section id="overview" class="metrics" aria-label="ภาพรวมข้อมูล"></section>
+      <section id="watchlist" class="panel">
+        <div class="panel-header"><div><p class="eyebrow">WATCHLIST</p><h2>ทีมที่ต้องติดตาม</h2></div><button id="refresh" type="button">รีเฟรชข้อมูล</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>Vendor</th><th>สถานะ</th><th>Risk score</th><th>QC coverage</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
+      </section>
+      <section id="import" class="panel import-panel">
+        <div><p class="eyebrow">EXCEL IMPORT</p><h2>ตรวจไฟล์ก่อนนำเข้า</h2><p class="muted">ต้องมีชีท Job Data, Complaint Log และ Technician Master ระบบตรวจเฉพาะโครงสร้าง ไม่ตัดสิน Root Cause แทนคน</p></div>
+        <form id="uploadForm"><label class="upload"><input id="workbook" type="file" accept=".xlsx" required /><span>เลือกไฟล์ Excel</span></label><button type="submit">ตรวจสอบไฟล์</button></form>
+        <div id="importResult" class="import-result" aria-live="polite"></div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
+
