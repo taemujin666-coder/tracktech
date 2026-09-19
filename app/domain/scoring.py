@@ -5,8 +5,8 @@ from .models import PerformanceResult, TechnicianPerformanceInput, WatchlistStat
 MINIMUM_COMPLETED_JOBS = 20
 
 
-def _rate(numerator: int, denominator: int) -> float | None:
-    if denominator <= 0:
+def _rate(numerator: int | None, denominator: int | None) -> float | None:
+    if numerator is None or denominator is None or denominator <= 0:
         return None
     return numerator / denominator
 
@@ -41,7 +41,7 @@ def calculate_performance(data: TechnicianPerformanceInput) -> PerformanceResult
             reasons=tuple(reasons),
         )
 
-    if data.severe_case_count > 0:
+    if data.severe_case_count is not None and data.severe_case_count > 0:
         reasons.append("มีเคส Safety Property Damage หรือ Integrity ที่ต้อง Escalate ทันที")
         status = WatchlistStatus.ESCALATED
     else:
@@ -90,4 +90,3 @@ def calculate_performance(data: TechnicianPerformanceInput) -> PerformanceResult
         evidence_noncompliance_rate=evidence_rate,
         reasons=tuple(reasons),
     )
-
