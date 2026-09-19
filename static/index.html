@@ -21,7 +21,11 @@
         <div><p class="eyebrow">TECHNICIAN PERFORMANCE</p><h1>ภาพรวมการติดตามช่าง</h1><p class="muted">ตรวจจับความเสี่ยง ติดตาม Action และปิดเคสด้วยหลักฐาน</p></div>
         <div id="mode" class="mode">กำลังโหลด</div>
       </header>
-      <section id="overview" class="metrics" aria-label="ภาพรวมข้อมูล"></section>
+      <section id="overview" class="summary-section" aria-label="ภาพรวมข้อมูล">
+        <div class="summary-heading"><div><p class="eyebrow">YTD SUMMARY</p><h2 id="ytdTitle">ผลการดำเนินงานสะสมปี</h2></div><p class="muted">Complaint และ Rework อ้างอิง Complaint Log · QC Fail อ้างอิง Job Data</p></div>
+        <div id="ytdMetrics" class="metrics"></div>
+        <div id="operationalMetrics" class="metrics metrics--operational"></div>
+      </section>
       <section id="watchlist" class="panel">
         <div class="panel-header"><div><p class="eyebrow">WATCHLIST</p><h2>ทีมที่ต้องติดตาม</h2></div><button id="refresh" type="button">รีเฟรชข้อมูล</button></div>
         <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>Vendor</th><th>สถานะ</th><th>Risk score</th><th>QC coverage</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>

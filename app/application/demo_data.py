@@ -15,8 +15,14 @@ def dashboard_demo() -> dict:
     return {
         "mode": "demo",
         "summary": {
+            "reporting_year": 2026,
             "jobs": 12254,
             "complaint_cases": 206,
+            "complaint_rate": 0.0168,
+            "rework_cases": 145,
+            "rework_rate": 0.0118,
+            "qc_fail_cases": 150,
+            "qc_fail_rate": 0.0122,
             "open_actions": 17,
             "pending_evidence": 6,
         },
@@ -32,4 +38,3 @@ def dashboard_demo() -> dict:
             for result in results
         ],
     }
-

@@ -1,6 +1,7 @@
 const formatNumber = new Intl.NumberFormat('th-TH');
 const evidenceDate = new Intl.DateTimeFormat('th-TH-u-ca-gregory', { day: 'numeric', month: 'short', year: 'numeric' });
 const percent = (value) => value == null ? 'รอข้อมูล' : `${Math.round(value * 100)}%`;
+const rate = (value) => value == null ? 'รอข้อมูล' : `${(Number(value) * 100).toFixed(2)}%`;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 let previewedFile = null;
 
@@ -9,11 +10,22 @@ async function loadDashboard() {
   if (!response.ok) throw new Error('ไม่สามารถโหลดข้อมูลได้');
   const data = await response.json();
   document.querySelector('#mode').textContent = data.mode === 'demo' ? 'โหมดตัวอย่าง' : 'ข้อมูลจากฐานจริง';
-  const cards = [
-    ['Jobs', data.summary.jobs, ''], ['Complaint cases', data.summary.complaint_cases, ''],
-    ['Action ค้าง', data.summary.open_actions, 'warning'], ['Evidence รอตรวจ', data.summary.pending_evidence, 'alert'],
+  document.querySelector('#ytdTitle').textContent = `ผลการดำเนินงานสะสมปี ${data.summary.reporting_year || 'ปัจจุบัน'}`;
+  const ytdCards = [
+    ['Jobs', formatNumber.format(data.summary.jobs), 'Job Data', ''],
+    ['Complaints', formatNumber.format(data.summary.complaint_cases), 'Complaint Log', ''],
+    ['Complaint Rate', rate(data.summary.complaint_rate), 'Complaints ÷ Jobs', ''],
+    ['Rework Cases', formatNumber.format(data.summary.rework_cases), 'Complaint Log: Rework = Yes', ''],
+    ['Rework Rate', rate(data.summary.rework_rate), 'Rework Cases ÷ Jobs', ''],
+    ['QC Fail Cases', formatNumber.format(data.summary.qc_fail_cases), 'Job Data: QC Result = Fail', ''],
+    ['QC Fail Rate', rate(data.summary.qc_fail_rate), 'QC Fail Cases ÷ Jobs', ''],
   ];
-  document.querySelector('#overview').innerHTML = cards.map(([label, value, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${formatNumber.format(value)}</strong></article>`).join('');
+  const operationalCards = [
+    ['Action ค้าง', formatNumber.format(data.summary.open_actions), 'warning'],
+    ['Evidence รอตรวจ', formatNumber.format(data.summary.pending_evidence), 'alert'],
+  ];
+  document.querySelector('#ytdMetrics').innerHTML = ytdCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
+  document.querySelector('#operationalMetrics').innerHTML = operationalCards.map(([label, value, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong></article>`).join('');
   document.querySelector('#technicianRows').innerHTML = data.technicians.map((tech) => `
     <tr><td><strong>${escapeHtml(tech.technician_id)}</strong></td><td>${escapeHtml(tech.vendor || '—')}</td>
     <td><span class="pill ${escapeHtml(tech.status)}">${escapeHtml(tech.status)}</span></td>

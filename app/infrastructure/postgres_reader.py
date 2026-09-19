@@ -49,6 +49,37 @@ SNAPSHOT_SOURCES_QUERY = """
 """
 
 
+DASHBOARD_SUMMARY_QUERY = """
+    WITH reporting_period AS (
+      SELECT date_trunc('year', current_date)::date AS starts_on,
+             (date_trunc('year', current_date) + interval '1 year')::date AS ends_on
+    ), totals AS (
+      SELECT
+        extract(year from starts_on)::integer AS reporting_year,
+        (SELECT count(*) FROM job_records
+         WHERE install_date >= starts_on AND install_date < ends_on)::integer AS jobs,
+        (SELECT count(*) FROM case_records
+         WHERE complaint_date >= starts_on AND complaint_date < ends_on)::integer AS complaint_cases,
+        (SELECT count(*) FROM case_records
+         WHERE complaint_date >= starts_on AND complaint_date < ends_on
+           AND rework IS TRUE)::integer AS rework_cases,
+        (SELECT count(*) FROM job_records
+         WHERE install_date >= starts_on AND install_date < ends_on
+           AND lower(coalesce(qc_result, '')) = 'fail')::integer AS qc_fail_cases,
+        (SELECT count(*) FROM actions
+         WHERE status NOT IN ('CLOSED', 'CANCELLED'))::integer AS open_actions,
+        (SELECT count(*) FROM evidence
+         WHERE review_status = 'PENDING')::integer AS pending_evidence
+      FROM reporting_period
+    )
+    SELECT *,
+      round(complaint_cases::numeric / nullif(jobs, 0), 4) AS complaint_rate,
+      round(rework_cases::numeric / nullif(jobs, 0), 4) AS rework_rate,
+      round(qc_fail_cases::numeric / nullif(jobs, 0), 4) AS qc_fail_rate
+    FROM totals
+"""
+
+
 class PostgresPerformanceReader:
     """Read model adapter. Domain code never imports psycopg."""
 
@@ -62,13 +93,7 @@ class PostgresPerformanceReader:
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    """
-                    SELECT
-                      (SELECT count(*) FROM job_records) AS jobs,
-                      (SELECT count(*) FROM case_records) AS complaint_cases,
-                      (SELECT count(*) FROM actions WHERE status NOT IN ('CLOSED', 'CANCELLED')) AS open_actions,
-                      (SELECT count(*) FROM evidence WHERE review_status = 'PENDING') AS pending_evidence
-                    """
+                    DASHBOARD_SUMMARY_QUERY
                 )
                 summary = dict(cursor.fetchone())
                 cursor.execute(
