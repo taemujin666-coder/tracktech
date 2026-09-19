@@ -5,6 +5,45 @@ const rate = (value) => value == null ? 'รอข้อมูล' : `${(Number(
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 let previewedFile = null;
 
+const routes = {
+  dashboard: {
+    eyebrow: 'PERFORMANCE DASHBOARD',
+    title: 'ผลการดำเนินงานสะสม',
+    description: 'ติดตามคุณภาพงานจากข้อมูลสะสม โดยแยกแหล่งข้อมูลของแต่ละตัวชี้วัดชัดเจน',
+  },
+  overview: {
+    eyebrow: 'OPERATIONAL OVERVIEW',
+    title: 'ภาพรวมการติดตามช่าง',
+    description: 'ตรวจสอบ Action และหลักฐานที่ยังต้องติดตามก่อนปิดเคส',
+  },
+  watchlist: {
+    eyebrow: 'WATCHLIST',
+    title: 'ทีมที่ต้องติดตาม',
+    description: 'ใช้เหตุผลและหลักฐานประกอบการทบทวน ไม่สรุปจากสีสถานะเพียงอย่างเดียว',
+  },
+  import: {
+    eyebrow: 'EVIDENCE-FIRST IMPORT',
+    title: 'นำเข้าข้อมูล',
+    description: 'ตรวจ Preview และหลักฐานก่อนบันทึกทุกครั้ง',
+  },
+};
+
+function setRoute() {
+  const requestedRoute = window.location.hash.slice(1);
+  const route = routes[requestedRoute] ? requestedRoute : 'dashboard';
+  if (!requestedRoute || route !== requestedRoute) history.replaceState(null, '', `#${route}`);
+  const meta = routes[route];
+  document.querySelector('#pageEyebrow').textContent = meta.eyebrow;
+  document.querySelector('#pageTitle').textContent = meta.title;
+  document.querySelector('#pageDescription').textContent = meta.description;
+  document.querySelectorAll('[data-route-section]').forEach((section) => {
+    section.hidden = section.dataset.routeSection !== route;
+  });
+  document.querySelectorAll('nav a[data-route]').forEach((link) => {
+    link.classList.toggle('active', link.dataset.route === route);
+  });
+}
+
 async function loadDashboard() {
   const response = await fetch('/api/dashboard');
   if (!response.ok) throw new Error('ไม่สามารถโหลดข้อมูลได้');
@@ -21,11 +60,11 @@ async function loadDashboard() {
     ['QC Fail Rate', rate(data.summary.qc_fail_rate), 'QC Fail Cases ÷ Jobs', ''],
   ];
   const operationalCards = [
-    ['Action ค้าง', formatNumber.format(data.summary.open_actions), 'warning'],
-    ['Evidence รอตรวจ', formatNumber.format(data.summary.pending_evidence), 'alert'],
+    ['Action ที่ยังไม่ปิด', formatNumber.format(data.summary.open_actions), 'ต้องกำหนดหรือดำเนินการติดตาม', 'warning'],
+    ['Evidence รอตรวจ', formatNumber.format(data.summary.pending_evidence), 'ยังไม่สรุปว่าเคสปิดหรือไม่มีปัญหา', 'alert'],
   ];
   document.querySelector('#ytdMetrics').innerHTML = ytdCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
-  document.querySelector('#operationalMetrics').innerHTML = operationalCards.map(([label, value, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong></article>`).join('');
+  document.querySelector('#operationalMetrics').innerHTML = operationalCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
   document.querySelector('#technicianRows').innerHTML = data.technicians.map((tech) => `
     <tr><td><strong>${escapeHtml(tech.technician_id)}</strong></td><td>${escapeHtml(tech.vendor || '—')}</td>
     <td><span class="pill ${escapeHtml(tech.status)}">${escapeHtml(tech.status)}</span></td>
@@ -111,4 +150,6 @@ function showError(error) {
   document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="6">${escapeHtml(error.message)}</td></tr>`;
 }
 
+window.addEventListener('hashchange', setRoute);
+setRoute();
 loadDashboard().catch(showError);
