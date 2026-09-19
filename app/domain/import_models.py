@@ -52,6 +52,9 @@ class JobRecord:
     qc_result: str | None
     qc_evidence_status: QCEvidenceStatus
     job_status: str | None
+    complaint: bool | None
+    rework: bool | None
+    integrity_violation: bool | None
     record_hash: str
 
 

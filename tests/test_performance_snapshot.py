@@ -5,42 +5,45 @@ from app.domain.models import WatchlistStatus
 
 
 class PerformanceSnapshotTest(unittest.TestCase):
-    def test_historical_complaint_is_attributed_with_its_own_provenance(self):
+    def test_discloses_the_approved_performance_summary_sources(self):
         source = TechnicianSnapshotSource(
             technician_id="T001",
             vendor_name="Vendor",
-            completed_jobs=25,
-            matched_cases=1,
-            historical_reference_cases=2,
-            rework_cases=1,
-            qc_inspected_jobs=24,
+            total_jobs=100,
+            completed_jobs=96,
+            complaint_cases=2,
+            rework_cases=3,
+            qc_inspected_jobs=98,
             qc_fail_cases=1,
-            repeated_issue_cases=0,
+            integrity_violations=4,
         )
 
         snapshot = calculate_snapshots([source])[0]
 
-        self.assertEqual(snapshot.reported_complaint_cases, 3)
-        self.assertIn("อ้างอิงงานก่อนช่วง Job Data 2", snapshot.status_reasons[0])
-        self.assertNotEqual(snapshot.performance.status, WatchlistStatus.INSUFFICIENT_DATA)
+        self.assertEqual(snapshot.performance.status, WatchlistStatus.REVIEW)
+        self.assertEqual(snapshot.performance.risk_score, 6.0)
+        self.assertEqual(snapshot.volume_context, "Higher volume")
+        self.assertIn("KPI ตาม Performance Summary", snapshot.status_reasons[0])
+        self.assertIn("Complaint Log", snapshot.status_reasons[0])
+        self.assertIn("Job Data", snapshot.status_reasons[0])
 
-    def test_unknown_evidence_requirements_are_not_silently_scored_as_zero(self):
+    def test_low_volume_context_is_disclosed_without_excluding_the_technician(self):
         source = TechnicianSnapshotSource(
             technician_id="T002",
             vendor_name="Vendor",
-            completed_jobs=25,
-            matched_cases=0,
-            historical_reference_cases=0,
+            total_jobs=32,
+            completed_jobs=30,
+            complaint_cases=0,
             rework_cases=0,
-            qc_inspected_jobs=0,
+            qc_inspected_jobs=31,
             qc_fail_cases=0,
-            repeated_issue_cases=0,
+            integrity_violations=0,
         )
 
         snapshot = calculate_snapshots([source])[0]
 
-        self.assertIn("Evidence ไม่ครบ", " ".join(snapshot.performance.reasons))
-        self.assertIn("QC fail", " ".join(snapshot.performance.reasons))
+        self.assertEqual(snapshot.performance.status, WatchlistStatus.NORMAL)
+        self.assertEqual(snapshot.volume_context, "Low volume — rate-sensitive")
 
 
 if __name__ == "__main__":

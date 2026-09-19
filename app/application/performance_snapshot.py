@@ -11,20 +11,19 @@ from app.domain.scoring import calculate_performance
 class TechnicianSnapshotSource:
     """Evidence-backed aggregates supplied by the read-model adapter.
 
-    Historical-reference cases are accepted only when Complaint Log identifies a
-    verified technician. They remain separate from Job Data matched cases so a
-    reviewer can see that their order pre-dates the imported Job Data period.
+    The calculation mirrors Performance Summary: job volume and QC Fail come
+    from Job Data; Complaint and Rework come from verified Complaint Log cases.
     """
 
     technician_id: str
     vendor_name: str | None
+    total_jobs: int
     completed_jobs: int
-    matched_cases: int
-    historical_reference_cases: int
+    complaint_cases: int
     rework_cases: int
     qc_inspected_jobs: int
     qc_fail_cases: int
-    repeated_issue_cases: int
+    integrity_violations: int
 
 
 @dataclass(frozen=True)
@@ -33,15 +32,20 @@ class TechnicianSnapshot:
     performance: PerformanceResult
 
     @property
-    def reported_complaint_cases(self) -> int:
-        return self.source.matched_cases + self.source.historical_reference_cases
+    def volume_context(self) -> str:
+        if self.source.total_jobs < 50:
+            return "Low volume — rate-sensitive"
+        if self.source.total_jobs < 100:
+            return "Moderate volume"
+        return "Higher volume"
 
     @property
     def status_reasons(self) -> tuple[str, ...]:
         context = (
-            f"Complaint ที่ยืนยัน Tech ได้ {self.reported_complaint_cases} เคส "
-            f"(จับคู่ Job Data {self.source.matched_cases}, "
-            f"อ้างอิงงานก่อนช่วง Job Data {self.source.historical_reference_cases})"
+            f"KPI ตาม Performance Summary: Complaint {self.source.complaint_cases}, "
+            f"Rework {self.source.rework_cases} จาก Complaint Log; "
+            f"QC Fail {self.source.qc_fail_cases} จาก Job Data; "
+            f"Combined Rate {self.performance.risk_score or 0:.2f}%"
         )
         return (context, *self.performance.reasons)
 
@@ -53,17 +57,11 @@ def calculate_snapshots(sources: Iterable[TechnicianSnapshotSource]) -> list[Tec
         performance = calculate_performance(
             TechnicianPerformanceInput(
                 technician_id=source.technician_id,
-                completed_jobs=source.completed_jobs,
-                technician_attributable_cases=source.matched_cases + source.historical_reference_cases,
+                completed_jobs=source.total_jobs,
+                technician_attributable_cases=source.complaint_cases,
                 rework_cases=source.rework_cases,
                 qc_inspected_jobs=source.qc_inspected_jobs,
                 qc_fail_cases=source.qc_fail_cases,
-                # Evidence submission requirements and Safety/Integrity severity
-                # are not yet imported, so they must remain unknown rather than 0.
-                watchlist_jobs_requiring_evidence=None,
-                watchlist_jobs_missing_evidence=None,
-                repeated_issue_cases=source.repeated_issue_cases,
-                severe_case_count=None,
             )
         )
         snapshots.append(TechnicianSnapshot(source, performance))

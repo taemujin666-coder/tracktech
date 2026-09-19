@@ -97,9 +97,11 @@ class PostgresImportRepository:
                     INSERT INTO job_records
                       (source_job_key, source_row_number, job_no, install_date, product_model,
                        source_tech_code, technician_id, technician_identity_status, project_name,
-                       vendor_name, qc_date, qc_result, qc_evidence_status, job_status, record_hash,
+                       vendor_name, qc_date, qc_result, qc_evidence_status, job_status,
+                       complaint, rework, integrity_violation, record_hash,
                        first_import_run_id, last_import_run_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s)
                     ON CONFLICT (source_job_key) DO UPDATE SET
                       source_row_number = EXCLUDED.source_row_number, job_no = EXCLUDED.job_no,
                       install_date = EXCLUDED.install_date, product_model = EXCLUDED.product_model,
@@ -108,6 +110,8 @@ class PostgresImportRepository:
                       project_name = EXCLUDED.project_name, vendor_name = EXCLUDED.vendor_name,
                       qc_date = EXCLUDED.qc_date, qc_result = EXCLUDED.qc_result,
                       qc_evidence_status = EXCLUDED.qc_evidence_status, job_status = EXCLUDED.job_status,
+                      complaint = EXCLUDED.complaint, rework = EXCLUDED.rework,
+                      integrity_violation = EXCLUDED.integrity_violation,
                       record_hash = EXCLUDED.record_hash, last_import_run_id = EXCLUDED.last_import_run_id,
                       updated_at = now()
                     WHERE job_records.record_hash IS DISTINCT FROM EXCLUDED.record_hash

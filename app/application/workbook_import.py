@@ -185,6 +185,9 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
             source_tech_code = _code(_value(row, fields, "technician_id"))
             job_status = _text(_value(row, fields, "job_status"))
             qc_result = _text(_value(row, fields, "qc_result"))
+            complaint = _bool(_value(row, fields, "complaint"))
+            rework = _bool(_value(row, fields, "rework"))
+            integrity_violation = _bool(_value(row, fields, "integrity_violation"))
             identity_status = _identity_status(source_tech_code, master_ids)
             qc_evidence_status = _qc_evidence_status(job_status, qc_result)
             base_key = (job_no.casefold(), install_date, (product_model or "").casefold())
@@ -195,6 +198,7 @@ def preview_workbook(path: str | Path, filename: str | None = None) -> WorkbookP
                 job_no, install_date, product_model, source_tech_code, technician_id, identity_status,
                 _text(_value(row, fields, "project")), _text(_value(row, fields, "vendor")),
                 _date(_value(row, fields, "qc_date")), qc_result, qc_evidence_status, job_status,
+                complaint, rework, integrity_violation,
             )
             jobs.append(JobRecord(source_key, row_number, *values, _hash_payload(*values)))
             if source_tech_code:

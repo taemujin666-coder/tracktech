@@ -14,6 +14,7 @@ class RootCauseCategory(StrEnum):
 
 class WatchlistStatus(StrEnum):
     NORMAL = "NORMAL"
+    REVIEW = "REVIEW"
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
     WATCHLIST = "WATCHLIST"
     INVESTIGATE = "INVESTIGATE"
@@ -36,9 +37,9 @@ class TechnicianPerformanceInput:
     rework_cases: int
     qc_inspected_jobs: int
     qc_fail_cases: int
-    watchlist_jobs_requiring_evidence: int | None
-    watchlist_jobs_missing_evidence: int | None
-    repeated_issue_cases: int | None
+    watchlist_jobs_requiring_evidence: int | None = None
+    watchlist_jobs_missing_evidence: int | None = None
+    repeated_issue_cases: int | None = None
     severe_case_count: int | None = None
 
 

@@ -33,7 +33,7 @@ def build_workbook(path: Path, case_status: str = "Resolved") -> None:
     job.title = "Job Data"
     job.append(["Job Data — title"])
     job.append(JOB_HEADERS)
-    job.append(["JOB001", datetime(2026, 1, 1), "Private", "Fridge", "T001", "One", "Mall", "Vendor", datetime(2026, 1, 1), "Pass", None, None, None, None, "Completed", None])
+    job.append(["JOB001", datetime(2026, 1, 1), "Private", "Fridge", "T001", "One", "Mall", "Vendor", datetime(2026, 1, 1), "Pass", None, "Yes", "No", "No", "Completed", None])
     job.append(["JOB001", datetime(2026, 1, 1), "Private", "Washer", "T001", "One", "Mall", "Vendor", datetime(2026, 1, 1), "Fail", None, None, None, None, "Completed", None])
     job.append(["JOB002", datetime(2026, 1, 2), "Private", "TV", "PWS1", None, "Mall", "Vendor", datetime(2026, 1, 2), "Pass", None, None, None, None, "Completed", None])
     job.append(["JOB003", datetime(2026, 1, 3), "Private", "TV", "KSP70", None, "Mall", "Vendor", datetime(2026, 1, 3), None, None, None, None, None, "Not Complete", None])
@@ -90,6 +90,10 @@ class ImportContractTest(unittest.TestCase):
         by_job = {record.job_no: record for record in preview.jobs}
         self.assertEqual(by_job["JOB002"].technician_identity_status, TechnicianIdentityStatus.UNVERIFIED_TECHNICIAN_IDENTITY)
         self.assertIsNone(by_job["JOB002"].technician_id)
+        fridge = next(record for record in preview.jobs if record.product_model == "Fridge")
+        self.assertTrue(fridge.complaint)
+        self.assertFalse(fridge.rework)
+        self.assertFalse(fridge.integrity_violation)
         self.assertEqual(by_job["JOB003"].technician_identity_status, TechnicianIdentityStatus.PENDING_MASTER_MATCH)
         self.assertEqual(by_job["JOB003"].qc_evidence_status, QCEvidenceStatus.NOT_APPLICABLE_NOT_COMPLETE)
         self.assertEqual(by_job["JOB004"].qc_evidence_status, QCEvidenceStatus.NOT_APPLICABLE_CANCELLED)
