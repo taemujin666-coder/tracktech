@@ -36,10 +36,10 @@ class TechnicianPerformanceInput:
     rework_cases: int
     qc_inspected_jobs: int
     qc_fail_cases: int
-    watchlist_jobs_requiring_evidence: int
-    watchlist_jobs_missing_evidence: int
-    repeated_issue_cases: int
-    severe_case_count: int = 0
+    watchlist_jobs_requiring_evidence: int | None
+    watchlist_jobs_missing_evidence: int | None
+    repeated_issue_cases: int | None
+    severe_case_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -53,4 +53,3 @@ class PerformanceResult:
     qc_coverage: float | None
     evidence_noncompliance_rate: float | None
     reasons: tuple[str, ...]
-
