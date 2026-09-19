@@ -120,6 +120,20 @@ async def commit_import(file: UploadFile = File(...)) -> dict:
     return {"status": "committed", **result.as_dict()}
 
 
+@app.post("/api/performance/refresh")
+def refresh_performance_snapshot() -> dict:
+    if os.getenv("TRACKTECH_DEMO_MODE", "true").casefold() == "true":
+        raise HTTPException(status_code=409, detail="โหมดตัวอย่างยังไม่มีข้อมูลจริงสำหรับสร้าง Performance Snapshot")
+    return {"status": "refreshed", **PostgresPerformanceReader().refresh_snapshot()}
+
+
+@app.get("/api/reconciliation")
+def reconciliation_queue() -> dict:
+    if os.getenv("TRACKTECH_DEMO_MODE", "true").casefold() == "true":
+        raise HTTPException(status_code=409, detail="โหมดตัวอย่างยังไม่มีคิวตรวจสอบจากข้อมูลจริง")
+    return PostgresPerformanceReader().reconciliation_queue()
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
