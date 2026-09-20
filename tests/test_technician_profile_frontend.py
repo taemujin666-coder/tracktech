@@ -48,6 +48,12 @@ class TechnicianProfileFrontendTest(unittest.TestCase):
         self.assertIn("<th>Project</th>", app_source)
         self.assertIn("case-history-table", styles)
 
+    def test_case_history_shows_issue_detail_from_complaint_log(self):
+        app_source = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("item.issue_detail", app_source)
+        self.assertIn("<th>รายละเอียดปัญหา</th>", app_source)
+        self.assertIn('colspan="10"', app_source)
+
 
 if __name__ == "__main__":
     unittest.main()

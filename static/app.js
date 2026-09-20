@@ -180,7 +180,8 @@ function renderTechnicianProfile(data) {
   const caseRows = (data.cases || []).map((item) => `
     <tr><td class="job-cell"><strong>${escapeHtml(item.job_no)}</strong></td><td><span class="project-chip">${escapeHtml(item.project_name || 'ไม่พบ Project')}</span></td>
     <td class="date-cell">${formatDate(item.complaint_date)}</td><td class="date-cell">${formatDate(item.close_date)}</td>
-    <td><span class="issue-chip">${escapeHtml(item.issue_category || 'ไม่ระบุ')}</span></td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
+    <td><span class="issue-chip">${escapeHtml(item.issue_category || 'ไม่ระบุ')}</span></td><td class="issue-detail">${escapeHtml(item.issue_detail || '—')}</td>
+    <td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
     <td>${escapeHtml(item.root_cause_type || item.root_cause_status || 'รอตรวจสอบ')}</td>
     <td><span class="case-status">${escapeHtml(item.case_status || 'รอตรวจ')}</span></td><td class="case-action">${escapeHtml(item.immediate_action || '—')}</td></tr>`).join('');
   const reviewRows = (data.review_cases || []).map((item) => `
@@ -221,7 +222,7 @@ function renderTechnicianProfile(data) {
     </section>
     <section class="panel case-history-panel">
       <div class="section-title"><div><p class="eyebrow">CASE HISTORY</p><h2>ประวัติเคสที่ผูกกับช่างแล้ว</h2></div><span class="count-label">${formatNumber.format(data.history_summary.case_records)} เคส</span></div>
-      <div class="table-wrap profile-table"><table class="case-history-table"><thead><tr><th>Job No.</th><th>Project</th><th>วันที่รับเรื่อง</th><th>วันที่แก้ไข</th><th>ประเภทปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="9">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
+      <div class="table-wrap profile-table"><table class="case-history-table"><thead><tr><th>Job No.</th><th>Project</th><th>วันที่รับเรื่อง</th><th>วันที่แก้ไข</th><th>ประเภทปัญหา</th><th>รายละเอียดปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="10">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
     </section>
     <section class="panel review-panel">
       <div class="section-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>เคสที่ยังไม่นับเข้าคะแนน</h2></div><span class="count-label">${formatNumber.format(data.history_summary.review_cases)} เคส</span></div>
