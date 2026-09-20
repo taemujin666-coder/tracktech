@@ -93,6 +93,31 @@ function countCard(label, value, unit, detail, tone = '') {
   </article>`;
 }
 
+function rankedInsightCard(title, items, badge, tone = '') {
+  const rows = (items || []).slice(0, 3).map((item) => {
+    const width = Math.max(Number(item.share || 0) * 100, 4);
+    const classification = item.classification
+      ? `<span class="cause-class ${escapeHtml(item.classification)}">${item.classification === 'TECHNICIAN' ? 'จากช่าง' : item.classification === 'NON_TECHNICIAN' ? 'ปัจจัยอื่น' : 'รอตรวจ'}</span>`
+      : '';
+    return `<li><div><span>${escapeHtml(item.label)}</span>${classification}<strong>${formatNumber.format(item.count)}</strong></div><span class="insight-bar"><i style="width:${width}%"></i></span></li>`;
+  }).join('');
+  return `<article class="ranked-insight-card ${tone}">
+    <header><p>${escapeHtml(title)}</p><span>${escapeHtml(badge)}</span></header>
+    ${rows ? `<ol>${rows}</ol>` : '<div class="insight-empty">ยังไม่มีข้อมูลที่ยืนยันแล้ว</div>'}
+  </article>`;
+}
+
+function actionLevelCard(actionLevel) {
+  const hasLevel = actionLevel?.level != null;
+  const level = hasLevel ? Number(actionLevel.level) : 0;
+  return `<article class="action-level-card level-${level}">
+    <header><p>ACTION LEVEL</p><span>${hasLevel ? `LEVEL ${level}` : 'NO ACTION'}</span></header>
+    <strong>${escapeHtml(actionLevel?.condition || 'หลักฐานยังไม่ครบ')}</strong>
+    <p>${escapeHtml(actionLevel?.measure || 'ติดตามหลักฐานก่อนกำหนดมาตรการ')}</p>
+    <small>${escapeHtml(actionLevel?.reason || 'ยังไม่มีข้อมูลเพียงพอ')}</small>
+  </article>`;
+}
+
 function combinedSignalCard(profile) {
   const segments = [
     { label: 'Complaint', count: Number(profile.complaint_cases || 0), className: 'complaint' },
@@ -149,13 +174,15 @@ function bindJobHistorySearch(jobs) {
 
 function renderTechnicianProfile(data) {
   const profile = data.profile;
+  const insights = data.case_insights || {};
   const reasons = (profile.status_reason || []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('');
   const jobs = data.jobs || [];
   const caseRows = (data.cases || []).map((item) => `
-    <tr><td><strong>${escapeHtml(item.job_no)}</strong></td><td>${formatDate(item.complaint_date)}</td>
-    <td>${formatDate(item.close_date)}</td><td>${escapeHtml(item.issue_category || '—')}</td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
+    <tr><td class="job-cell"><strong>${escapeHtml(item.job_no)}</strong></td><td><span class="project-chip">${escapeHtml(item.project_name || 'ไม่พบ Project')}</span></td>
+    <td class="date-cell">${formatDate(item.complaint_date)}</td><td class="date-cell">${formatDate(item.close_date)}</td>
+    <td><span class="issue-chip">${escapeHtml(item.issue_category || 'ไม่ระบุ')}</span></td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
     <td>${escapeHtml(item.root_cause_type || item.root_cause_status || 'รอตรวจสอบ')}</td>
-    <td>${escapeHtml(item.case_status || '—')}</td><td>${escapeHtml(item.immediate_action || '—')}</td></tr>`).join('');
+    <td><span class="case-status">${escapeHtml(item.case_status || 'รอตรวจ')}</span></td><td class="case-action">${escapeHtml(item.immediate_action || '—')}</td></tr>`).join('');
   const reviewRows = (data.review_cases || []).map((item) => `
     <tr><td><strong>${escapeHtml(item.job_no)}</strong></td><td>${formatDate(item.complaint_date)}</td>
     <td>${escapeHtml(item.issue_category || '—')}</td><td>${escapeHtml(item.link_status)}</td>
@@ -177,11 +204,12 @@ function renderTechnicianProfile(data) {
           ${countCard('Jobs ทั้งหมด', profile.total_jobs, 'งาน', profile.volume_context || 'รอข้อมูล', 'jobs')}
           ${countCard('Complaint', profile.complaint_cases, 'เคส', 'Complaint Log', 'complaint')}
           ${countCard('Rework', profile.rework_cases, 'เคส', 'Complaint Log', 'rework')}
-          ${countCard('QC Fail', profile.qc_fail_cases, 'งาน', 'Job Data', 'qc-fail')}
-          ${countCard('Service Mind', profile.service_mind_cases, 'เคส', 'ข้อมูลประกอบ · ไม่รวม Combined Rate', 'service-mind')}
-          ${countCard('QC มีหลักฐาน', profile.qc_inspected_jobs, 'งาน', `Coverage ${percent(profile.qc_coverage)}`, 'coverage')}
+          ${rankedInsightCard('ISSUE CATEGORY', insights.issue_categories, `${formatNumber.format(insights.distinct_issue_categories || 0)} หมวด`, 'issue-analysis')}
+          ${rankedInsightCard('ROOT CAUSE', insights.root_causes, `ยืนยัน ${formatNumber.format(insights.confirmed_root_cause_cases || 0)} · รอตรวจ ${formatNumber.format(insights.pending_root_cause_cases || 0)}`, 'root-analysis')}
+          ${actionLevelCard(insights.action_level)}
         </div>
       </div>
+      <p class="action-level-note">Action Level ใช้เฉพาะเคสที่ Root Cause ยืนยันแล้วและอยู่ในกลุ่มสาเหตุจากช่าง ส่วน Product / Customer / Site และรายการรอตรวจจะไม่ถูกใช้ยกระดับมาตรการอัตโนมัติ</p>
       ${reasons ? `<ul class="profile-reasons">${reasons}</ul>` : ''}
     </section>
     <section class="panel">
@@ -191,9 +219,9 @@ function renderTechnicianProfile(data) {
       </div>
       <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>วันที่ติดตั้ง</th><th>สินค้า</th><th>Project</th><th>QC Result</th><th>Job Status</th></tr></thead><tbody id="jobHistoryRows">${renderJobHistoryRows(jobs)}</tbody></table></div>
     </section>
-    <section class="panel">
+    <section class="panel case-history-panel">
       <div class="section-title"><div><p class="eyebrow">CASE HISTORY</p><h2>ประวัติเคสที่ผูกกับช่างแล้ว</h2></div><span class="count-label">${formatNumber.format(data.history_summary.case_records)} เคส</span></div>
-      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>วันที่รับเรื่อง</th><th>วันที่แก้ไข</th><th>ประเภทปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="8">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
+      <div class="table-wrap profile-table"><table class="case-history-table"><thead><tr><th>Job No.</th><th>Project</th><th>วันที่รับเรื่อง</th><th>วันที่แก้ไข</th><th>ประเภทปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="9">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
     </section>
     <section class="panel review-panel">
       <div class="section-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>เคสที่ยังไม่นับเข้าคะแนน</h2></div><span class="count-label">${formatNumber.format(data.history_summary.review_cases)} เคส</span></div>

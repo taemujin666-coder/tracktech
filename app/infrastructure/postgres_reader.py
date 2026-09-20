@@ -4,6 +4,7 @@ import json
 import os
 from datetime import date
 
+from app.application.technician_case_insights import build_technician_case_insights
 from app.application.performance_snapshot import TechnicianSnapshotSource, calculate_snapshots
 
 
@@ -109,15 +110,23 @@ TECHNICIAN_JOBS_QUERY = """
 
 
 TECHNICIAN_CASES_QUERY = """
-    SELECT job_no, completed_date, complaint_date, issue_category, issue_detail,
-           qc_result, root_cause_status, root_cause_type, root_cause_detail,
-           immediate_action, preventive_action, rework, service_mind,
-           owner_name, case_status, close_date, link_status
-    FROM case_records
-    WHERE technician_id = %s
-      AND technician_identity_status = 'VERIFIED'
-      AND link_status NOT IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
-    ORDER BY complaint_date DESC NULLS LAST, job_no, source_row_number
+    SELECT c.job_no, project.project_name, c.completed_date, c.complaint_date,
+           c.issue_category, c.issue_detail, c.qc_result, c.root_cause_status,
+           c.root_cause_type, c.root_cause_detail, c.immediate_action,
+           c.preventive_action, c.rework, c.service_mind, c.owner_name,
+           c.case_status, c.close_date, c.link_status
+    FROM case_records c
+    LEFT JOIN LATERAL (
+      SELECT j.project_name
+      FROM job_records j
+      WHERE j.job_no = c.job_no AND j.project_name IS NOT NULL
+      ORDER BY j.install_date DESC NULLS LAST, j.source_row_number
+      LIMIT 1
+    ) project ON TRUE
+    WHERE c.technician_id = %s
+      AND c.technician_identity_status = 'VERIFIED'
+      AND c.link_status NOT IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
+    ORDER BY c.complaint_date DESC NULLS LAST, c.job_no, c.source_row_number
 """
 
 
@@ -303,6 +312,7 @@ class PostgresPerformanceReader:
                 profile["status_reason"] = [profile["status_reason"]]
         return {
             "profile": profile,
+            "case_insights": build_technician_case_insights(cases),
             "history_summary": {
                 "job_records": len(jobs),
                 "case_records": len(cases),

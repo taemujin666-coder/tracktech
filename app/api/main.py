@@ -10,6 +10,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from openpyxl.utils.exceptions import InvalidFileException
 
+from app.application.technician_case_insights import build_technician_case_insights
 from app.application.demo_data import dashboard_demo
 from app.application.import_contract import validate_workbook
 from app.application.workbook_import import preview_workbook
@@ -64,6 +65,7 @@ def technician_profile(technician_id: str) -> dict:
                     "service_mind_cases": 0,
                     "volume_context": "ข้อมูลตัวอย่าง",
                 },
+                "case_insights": build_technician_case_insights([]),
                 "history_summary": {"job_records": 0, "case_records": 0, "review_cases": 0},
                 "jobs": [],
                 "cases": [],

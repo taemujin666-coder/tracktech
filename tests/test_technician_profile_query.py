@@ -30,6 +30,12 @@ class TechnicianProfileQueryTest(unittest.TestCase):
         self.assertIn("service_mind", TECHNICIAN_CASES_QUERY)
         self.assertIn("close_date", TECHNICIAN_CASES_QUERY)
 
+    def test_case_history_resolves_project_without_duplicating_cases(self):
+        self.assertIn("project.project_name", TECHNICIAN_CASES_QUERY)
+        self.assertIn("LEFT JOIN LATERAL", TECHNICIAN_CASES_QUERY)
+        self.assertIn("j.job_no = c.job_no", TECHNICIAN_CASES_QUERY)
+        self.assertIn("LIMIT 1", TECHNICIAN_CASES_QUERY)
+
 
 if __name__ == "__main__":
     unittest.main()
