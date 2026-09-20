@@ -33,7 +33,10 @@
       </section>
       <section id="watchlist" data-route-section="watchlist" class="route-section panel" hidden>
         <div class="panel-header"><div><p class="eyebrow">WATCHLIST</p><h2>ทีมที่ต้องติดตาม</h2></div><button id="refresh" type="button">รีเฟรชข้อมูล</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>Vendor</th><th>สถานะ</th><th>Risk score</th><th>QC coverage</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>ชื่อช่าง</th><th>Team</th><th>Vendor</th><th>สถานะ</th><th>Combined Rate</th><th>QC coverage</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
+      </section>
+      <section id="technician" data-route-section="technician" class="route-section" hidden aria-label="ข้อมูลรายช่าง">
+        <div id="technicianProfile" class="profile-loading">กำลังโหลดข้อมูลช่าง…</div>
       </section>
       <section id="import" data-route-section="import" class="route-section panel import-panel" hidden>
         <div><p class="eyebrow">EVIDENCE-FIRST IMPORT</p><h2>Preview ก่อนบันทึกทุกครั้ง</h2><p class="muted">ใช้ Complaint Log เป็นหลักฐานของเคส เก็บ PWS เป็นปริมาณงานแต่ไม่ให้คะแนนรายบุคคล และ Import ซ้ำจะไม่สร้างรายการซ้ำ</p></div>

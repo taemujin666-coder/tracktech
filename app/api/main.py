@@ -44,11 +44,36 @@ def technician_profile(technician_id: str) -> dict:
     if data["mode"] == "demo":
         match = next((item for item in data["technicians"] if item["technician_id"] == technician_id), None)
         if match:
-            return match
+            return {
+                "mode": "demo",
+                "profile": {
+                    **match,
+                    "technician_name": None,
+                    "team": "ทีมตัวอย่าง",
+                    "vendor_name": match.get("vendor"),
+                    "area": None,
+                    "active": True,
+                    "total_jobs": None,
+                    "complaint_cases": None,
+                    "rework_cases": None,
+                    "qc_fail_cases": None,
+                    "complaint_rate": None,
+                    "rework_rate": None,
+                    "qc_fail_rate": None,
+                    "combined_rate": None,
+                    "volume_context": "ข้อมูลตัวอย่าง",
+                },
+                "team_summary": None,
+                "team_members": [],
+                "history_summary": {"job_records": 0, "case_records": 0, "review_cases": 0},
+                "jobs": [],
+                "cases": [],
+                "review_cases": [],
+            }
     else:
         match = PostgresPerformanceReader().technician_profile(technician_id)
         if match:
-            return match
+            return {"mode": "live", **match}
     raise HTTPException(status_code=404, detail="Technician not found")
 
 

@@ -2,8 +2,10 @@ const formatNumber = new Intl.NumberFormat('th-TH');
 const evidenceDate = new Intl.DateTimeFormat('th-TH-u-ca-gregory', { day: 'numeric', month: 'short', year: 'numeric' });
 const percent = (value) => value == null ? 'รอข้อมูล' : `${Math.round(value * 100)}%`;
 const rate = (value) => value == null ? 'รอข้อมูล' : `${(Number(value) * 100).toFixed(2)}%`;
+const formatDate = (value) => value ? evidenceDate.format(new Date(`${value}T00:00:00`)) : '—';
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 let previewedFile = null;
+let loadedTechnicianId = null;
 
 const routes = {
   dashboard: {
@@ -26,12 +28,18 @@ const routes = {
     title: 'นำเข้าข้อมูล',
     description: 'ตรวจ Preview และหลักฐานก่อนบันทึกทุกครั้ง',
   },
+  technician: {
+    eyebrow: 'TECHNICIAN PROFILE',
+    title: 'ข้อมูลรายช่าง',
+    description: 'สรุปผลงาน เปรียบเทียบทีม และตรวจประวัติงานกับเคสจากหลักฐานต้นทาง',
+  },
 };
 
 function setRoute() {
   const requestedRoute = window.location.hash.slice(1);
-  const route = routes[requestedRoute] ? requestedRoute : 'dashboard';
-  if (!requestedRoute || route !== requestedRoute) history.replaceState(null, '', `#${route}`);
+  const technicianMatch = requestedRoute.match(/^technician\/([^/]+)$/);
+  const route = technicianMatch ? 'technician' : (routes[requestedRoute] ? requestedRoute : 'dashboard');
+  if (!requestedRoute || (route !== 'technician' && route !== requestedRoute)) history.replaceState(null, '', `#${route}`);
   const meta = routes[route];
   document.querySelector('#pageEyebrow').textContent = meta.eyebrow;
   document.querySelector('#pageTitle').textContent = meta.title;
@@ -40,8 +48,12 @@ function setRoute() {
     section.hidden = section.dataset.routeSection !== route;
   });
   document.querySelectorAll('nav a[data-route]').forEach((link) => {
-    link.classList.toggle('active', link.dataset.route === route);
+    link.classList.toggle('active', link.dataset.route === (route === 'technician' ? 'watchlist' : route));
   });
+  if (technicianMatch) {
+    const technicianId = decodeURIComponent(technicianMatch[1]);
+    if (technicianId !== loadedTechnicianId) loadTechnicianProfile(technicianId).catch(showProfileError);
+  }
 }
 
 async function loadDashboard() {
@@ -66,10 +78,102 @@ async function loadDashboard() {
   document.querySelector('#ytdMetrics').innerHTML = ytdCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
   document.querySelector('#operationalMetrics').innerHTML = operationalCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
   document.querySelector('#technicianRows').innerHTML = data.technicians.map((tech) => `
-    <tr><td><strong>${escapeHtml(tech.technician_id)}</strong></td><td>${escapeHtml(tech.vendor || '—')}</td>
+    <tr><td><a class="tech-link" href="#technician/${encodeURIComponent(tech.technician_id)}">${escapeHtml(tech.technician_id)}</a></td>
+    <td>${escapeHtml(tech.technician_name || '—')}</td><td>${escapeHtml(tech.team || '—')}</td><td>${escapeHtml(tech.vendor || '—')}</td>
     <td><span class="pill ${escapeHtml(tech.status)}">${escapeHtml(tech.status)}</span></td>
-    <td>${tech.risk_score == null ? 'รอข้อมูล' : escapeHtml(tech.risk_score)}</td><td>${percent(tech.qc_coverage)}</td>
+    <td>${rate(tech.combined_rate)}</td><td>${percent(tech.qc_coverage)}</td>
     <td class="reason">${(tech.reasons || []).map(escapeHtml).join(' · ')}</td></tr>`).join('');
+}
+
+function profileMetric(label, value, detail = '', tone = '') {
+  return `<article class="metric ${tone}"><p>${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></article>`;
+}
+
+function renderTechnicianProfile(data) {
+  const profile = data.profile;
+  const team = data.team_summary;
+  const reasons = (profile.status_reason || []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('');
+  const memberRows = (data.team_members || []).map((member) => `
+    <tr><td><a class="tech-link" href="#technician/${encodeURIComponent(member.technician_id)}">${escapeHtml(member.technician_id)}</a></td>
+    <td>${escapeHtml(member.technician_name || '—')}</td><td>${formatNumber.format(member.total_jobs || 0)}</td>
+    <td>${rate(member.combined_rate)}</td><td><span class="pill ${escapeHtml(member.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(member.watchlist_status || 'รอข้อมูล')}</span></td>
+    <td>${escapeHtml(member.volume_context || '—')}</td></tr>`).join('');
+  const jobRows = (data.jobs || []).map((job) => `
+    <tr><td><strong>${escapeHtml(job.job_no)}</strong></td><td>${formatDate(job.install_date)}</td>
+    <td>${escapeHtml(job.product_model || '—')}</td><td>${escapeHtml(job.project_name || '—')}</td>
+    <td>${escapeHtml(job.qc_result || '—')}</td><td>${escapeHtml(job.job_status || '—')}</td></tr>`).join('');
+  const caseRows = (data.cases || []).map((item) => `
+    <tr><td><strong>${escapeHtml(item.job_no)}</strong></td><td>${formatDate(item.complaint_date)}</td>
+    <td>${escapeHtml(item.issue_category || '—')}</td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
+    <td>${escapeHtml(item.root_cause_type || item.root_cause_status || 'รอตรวจสอบ')}</td>
+    <td>${escapeHtml(item.case_status || '—')}</td><td>${escapeHtml(item.immediate_action || '—')}</td></tr>`).join('');
+  const reviewRows = (data.review_cases || []).map((item) => `
+    <tr><td><strong>${escapeHtml(item.job_no)}</strong></td><td>${formatDate(item.complaint_date)}</td>
+    <td>${escapeHtml(item.issue_category || '—')}</td><td>${escapeHtml(item.link_status)}</td>
+    <td>${escapeHtml(item.case_status || '—')}</td></tr>`).join('');
+
+  document.querySelector('#pageTitle').textContent = profile.technician_name || profile.technician_id;
+  document.querySelector('#pageDescription').textContent = `${profile.technician_id} · ${profile.team || 'ยังไม่มี Team'} · ${profile.vendor_name || 'ยังไม่มี Vendor'}`;
+  document.querySelector('#technicianProfile').innerHTML = `
+    <a class="back-link" href="#watchlist">← กลับไป Watchlist</a>
+    <section class="panel profile-identity">
+      <div><p class="eyebrow">TECHNICIAN</p><h2>${escapeHtml(profile.technician_name || 'ไม่พบชื่อช่าง')}</h2><p class="muted">Tech ID ${escapeHtml(profile.technician_id)} · ${escapeHtml(profile.area || 'ไม่ระบุพื้นที่')}</p></div>
+      <div class="profile-tags"><span>${escapeHtml(profile.team || 'ไม่มี Team')}</span><span>${escapeHtml(profile.vendor_name || 'ไม่มี Vendor')}</span><span>${profile.active ? 'Active' : 'Inactive'}</span></div>
+    </section>
+    <section class="profile-section">
+      <div class="section-title"><div><p class="eyebrow">PERFORMANCE SUMMARY</p><h2>ผลการดำเนินงานรายช่าง</h2></div><span class="pill ${escapeHtml(profile.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(profile.watchlist_status || 'รอข้อมูล')}</span></div>
+      <div class="metrics metrics--profile">
+        ${profileMetric('Jobs', formatNumber.format(profile.total_jobs || 0), profile.volume_context || 'รอข้อมูล')}
+        ${profileMetric('Complaints', formatNumber.format(profile.complaint_cases || 0), rate(profile.complaint_rate))}
+        ${profileMetric('Rework Cases', formatNumber.format(profile.rework_cases || 0), rate(profile.rework_rate))}
+        ${profileMetric('QC Fail Cases', formatNumber.format(profile.qc_fail_cases || 0), rate(profile.qc_fail_rate))}
+        ${profileMetric('Combined Rate', rate(profile.combined_rate), 'Complaint + Rework + QC Fail', 'warning')}
+        ${profileMetric('QC Coverage', percent(profile.qc_coverage), `${formatNumber.format(profile.qc_inspected_jobs || 0)} งานมีข้อมูล QC`)}
+      </div>
+      ${reasons ? `<ul class="profile-reasons">${reasons}</ul>` : ''}
+    </section>
+    <section class="panel">
+      <div class="section-title"><div><p class="eyebrow">TEAM SUMMARY</p><h2>${escapeHtml(team?.team || profile.team || 'ยังไม่มีข้อมูล Team')}</h2></div><span class="muted">เปรียบเทียบด้วยนิยาม KPI ชุดเดียวกัน</span></div>
+      ${team ? `<div class="metrics metrics--team">
+        ${profileMetric('สมาชิกทีม', formatNumber.format(team.member_count), `Active ${formatNumber.format(team.active_member_count)}`)}
+        ${profileMetric('Jobs รวม', formatNumber.format(team.total_jobs), 'Job Data')}
+        ${profileMetric('Complaints', formatNumber.format(team.complaint_cases), rate(team.complaint_rate))}
+        ${profileMetric('Rework', formatNumber.format(team.rework_cases), rate(team.rework_rate))}
+        ${profileMetric('QC Fail', formatNumber.format(team.qc_fail_cases), rate(team.qc_fail_rate))}
+        ${profileMetric('Combined Rate ทีม', rate(team.combined_rate), 'Complaint + Rework + QC Fail')}
+      </div>
+      <div class="table-wrap profile-table"><table><thead><tr><th>Tech ID</th><th>ชื่อช่าง</th><th>Jobs</th><th>Combined Rate</th><th>สถานะ</th><th>Volume</th></tr></thead><tbody>${memberRows || '<tr><td colspan="6">ยังไม่มีสมาชิกทีม</td></tr>'}</tbody></table></div>` : '<p class="muted">Technician Master ยังไม่ได้ระบุ Team สำหรับช่างรายนี้</p>'}
+    </section>
+    <section class="panel">
+      <div class="section-title"><div><p class="eyebrow">JOB HISTORY</p><h2>ประวัติงานย้อนหลัง</h2></div><span class="count-label">${formatNumber.format(data.history_summary.job_records)} รายการ</span></div>
+      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>วันที่ติดตั้ง</th><th>สินค้า</th><th>Project</th><th>QC Result</th><th>Job Status</th></tr></thead><tbody>${jobRows || '<tr><td colspan="6">ไม่พบประวัติงาน</td></tr>'}</tbody></table></div>
+    </section>
+    <section class="panel">
+      <div class="section-title"><div><p class="eyebrow">CASE HISTORY</p><h2>ประวัติเคสที่ผูกกับช่างแล้ว</h2></div><span class="count-label">${formatNumber.format(data.history_summary.case_records)} เคส</span></div>
+      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>Complaint Date</th><th>ประเภทปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="7">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
+    </section>
+    <section class="panel review-panel">
+      <div class="section-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>เคสที่ยังไม่นับเข้าคะแนน</h2></div><span class="count-label">${formatNumber.format(data.history_summary.review_cases)} เคส</span></div>
+      <p class="muted">Tech ID ขัดกับ Job Data หรือยังหา Job No. ไม่พบ จึงแสดงเป็นหลักฐานแต่ไม่รวมใน Combined Rate</p>
+      ${reviewRows ? `<div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>Complaint Date</th><th>ประเภทปัญหา</th><th>เหตุผลพักตรวจ</th><th>สถานะ</th></tr></thead><tbody>${reviewRows}</tbody></table></div>` : '<div class="empty-state">ไม่มีเคสที่ต้องพักตรวจสำหรับช่างรายนี้</div>'}
+    </section>`;
+}
+
+async function loadTechnicianProfile(technicianId) {
+  const target = document.querySelector('#technicianProfile');
+  target.className = 'profile-loading';
+  target.textContent = 'กำลังโหลดข้อมูลช่าง…';
+  const response = await fetch(`/api/technicians/${encodeURIComponent(technicianId)}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.detail || 'ไม่สามารถโหลดข้อมูลช่างได้');
+  loadedTechnicianId = technicianId;
+  target.className = '';
+  renderTechnicianProfile(data);
+}
+
+function showProfileError(error) {
+  loadedTechnicianId = null;
+  document.querySelector('#technicianProfile').innerHTML = `<a class="back-link" href="#watchlist">← กลับไป Watchlist</a><div class="panel empty-state">${escapeHtml(error.message)}</div>`;
 }
 
 function previewMarkup(data) {
@@ -147,7 +251,7 @@ async function commitImport() {
 }
 
 function showError(error) {
-  document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="6">${escapeHtml(error.message)}</td></tr>`;
+  document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="8">${escapeHtml(error.message)}</td></tr>`;
 }
 
 window.addEventListener('hashchange', setRoute);

@@ -80,6 +80,110 @@ DASHBOARD_SUMMARY_QUERY = """
 """
 
 
+TECHNICIAN_PROFILE_QUERY = """
+    SELECT t.technician_id, t.technician_name, t.team, t.vendor_name,
+           t.area, t.active, t.source_status,
+           s.snapshot_date, s.total_jobs, s.complaint_cases, s.rework_cases,
+           s.qc_inspected_jobs, s.qc_fail_cases, s.integrity_violations,
+           s.complaint_rate, s.rework_rate, s.qc_fail_rate, s.combined_rate,
+           s.volume_context, s.watchlist_status, s.qc_coverage,
+           s.status_reason
+    FROM technicians t
+    LEFT JOIN LATERAL (
+      SELECT * FROM performance_snapshots p
+      WHERE p.technician_id = t.technician_id
+      ORDER BY p.snapshot_date DESC LIMIT 1
+    ) s ON TRUE
+    WHERE t.technician_id = %s
+"""
+
+
+TEAM_SUMMARY_QUERY = """
+    WITH selected_team AS (
+      SELECT %s::text AS team_name
+    ), members AS (
+      SELECT t.technician_id, t.active
+      FROM technicians t
+      JOIN selected_team st ON t.team = st.team_name
+    ), jobs AS (
+      SELECT count(*)::integer AS total_jobs,
+        count(*) FILTER (
+          WHERE lower(coalesce(j.qc_result, '')) = 'fail'
+        )::integer AS qc_fail_cases
+      FROM job_records j
+      JOIN members m ON m.technician_id = j.technician_id
+      WHERE j.technician_identity_status = 'VERIFIED'
+    ), cases AS (
+      SELECT count(*)::integer AS complaint_cases,
+        count(*) FILTER (WHERE c.rework IS TRUE)::integer AS rework_cases
+      FROM case_records c
+      JOIN members m ON m.technician_id = c.technician_id
+      WHERE c.technician_identity_status = 'VERIFIED'
+        AND c.link_status NOT IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
+    )
+    SELECT st.team_name AS team,
+      (SELECT count(*)::integer FROM members) AS member_count,
+      (SELECT count(*) FILTER (WHERE active)::integer FROM members) AS active_member_count,
+      jobs.total_jobs, cases.complaint_cases, cases.rework_cases, jobs.qc_fail_cases,
+      round(cases.complaint_cases::numeric / nullif(jobs.total_jobs, 0), 4) AS complaint_rate,
+      round(cases.rework_cases::numeric / nullif(jobs.total_jobs, 0), 4) AS rework_rate,
+      round(jobs.qc_fail_cases::numeric / nullif(jobs.total_jobs, 0), 4) AS qc_fail_rate,
+      round(
+        (cases.complaint_cases + cases.rework_cases + jobs.qc_fail_cases)::numeric
+        / nullif(jobs.total_jobs, 0), 4
+      ) AS combined_rate
+    FROM selected_team st CROSS JOIN jobs CROSS JOIN cases
+"""
+
+
+TEAM_MEMBERS_QUERY = """
+    SELECT t.technician_id, t.technician_name, t.active,
+           s.total_jobs, s.complaint_cases, s.rework_cases, s.qc_fail_cases,
+           s.combined_rate, s.watchlist_status, s.volume_context
+    FROM technicians t
+    LEFT JOIN LATERAL (
+      SELECT * FROM performance_snapshots p
+      WHERE p.technician_id = t.technician_id
+      ORDER BY p.snapshot_date DESC LIMIT 1
+    ) s ON TRUE
+    WHERE t.team = %s
+    ORDER BY s.combined_rate DESC NULLS LAST, t.technician_id
+"""
+
+
+TECHNICIAN_JOBS_QUERY = """
+    SELECT job_no, install_date, product_model, project_name, vendor_name,
+           qc_date, qc_result, qc_evidence_status, job_status
+    FROM job_records
+    WHERE technician_id = %s
+      AND technician_identity_status = 'VERIFIED'
+    ORDER BY install_date DESC NULLS LAST, job_no, source_row_number
+"""
+
+
+TECHNICIAN_CASES_QUERY = """
+    SELECT job_no, completed_date, complaint_date, issue_category, issue_detail,
+           qc_result, root_cause_status, root_cause_type, root_cause_detail,
+           immediate_action, preventive_action, rework, service_mind,
+           owner_name, case_status, close_date, link_status
+    FROM case_records
+    WHERE technician_id = %s
+      AND technician_identity_status = 'VERIFIED'
+      AND link_status NOT IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
+    ORDER BY complaint_date DESC NULLS LAST, job_no, source_row_number
+"""
+
+
+TECHNICIAN_REVIEW_CASES_QUERY = """
+    SELECT job_no, completed_date, complaint_date, source_tech_code,
+           issue_category, issue_detail, rework, case_status, link_status
+    FROM case_records
+    WHERE technician_id = %s
+      AND link_status IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
+    ORDER BY complaint_date DESC NULLS LAST, job_no, source_row_number
+"""
+
+
 class PostgresPerformanceReader:
     """Read model adapter. Domain code never imports psycopg."""
 
@@ -98,11 +202,13 @@ class PostgresPerformanceReader:
                 summary = dict(cursor.fetchone())
                 cursor.execute(
                     """
-                    SELECT technician_id, vendor_name AS vendor, watchlist_status AS status,
-                           risk_score, qc_coverage, status_reason AS reasons
-                    FROM performance_snapshots
-                    WHERE snapshot_date = (SELECT max(snapshot_date) FROM performance_snapshots)
-                    ORDER BY risk_score DESC NULLS LAST, technician_id
+                    SELECT p.technician_id, t.technician_name, t.team,
+                           p.vendor_name AS vendor, p.watchlist_status AS status,
+                           p.combined_rate, p.qc_coverage, p.status_reason AS reasons
+                    FROM performance_snapshots p
+                    JOIN technicians t ON t.technician_id = p.technician_id
+                    WHERE p.snapshot_date = (SELECT max(snapshot_date) FROM performance_snapshots)
+                    ORDER BY p.combined_rate DESC NULLS LAST, p.technician_id
                     LIMIT 25
                     """
                 )
@@ -229,25 +335,40 @@ class PostgresPerformanceReader:
 
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT t.technician_id, t.technician_name, t.vendor_name, t.active,
-                           s.watchlist_status, s.risk_score, s.qc_coverage, s.status_reason
-                    FROM technicians t
-                    LEFT JOIN LATERAL (
-                      SELECT * FROM performance_snapshots p
-                      WHERE p.technician_id = t.technician_id
-                      ORDER BY p.snapshot_date DESC LIMIT 1
-                    ) s ON TRUE
-                    WHERE t.technician_id = %s
-                    """,
-                    (technician_id,),
-                )
+                cursor.execute(TECHNICIAN_PROFILE_QUERY, (technician_id,))
                 row = cursor.fetchone()
-        profile = dict(row) if row else None
-        if profile and isinstance(profile.get("status_reason"), str):
+                if not row:
+                    return None
+                profile = dict(row)
+                team_summary = None
+                team_members: list[dict] = []
+                if profile.get("team"):
+                    cursor.execute(TEAM_SUMMARY_QUERY, (profile["team"],))
+                    team_summary = dict(cursor.fetchone())
+                    cursor.execute(TEAM_MEMBERS_QUERY, (profile["team"],))
+                    team_members = [dict(member) for member in cursor.fetchall()]
+                cursor.execute(TECHNICIAN_JOBS_QUERY, (technician_id,))
+                jobs = [dict(job) for job in cursor.fetchall()]
+                cursor.execute(TECHNICIAN_CASES_QUERY, (technician_id,))
+                cases = [dict(case) for case in cursor.fetchall()]
+                cursor.execute(TECHNICIAN_REVIEW_CASES_QUERY, (technician_id,))
+                review_cases = [dict(case) for case in cursor.fetchall()]
+
+        if isinstance(profile.get("status_reason"), str):
             try:
                 profile["status_reason"] = json.loads(profile["status_reason"])
             except json.JSONDecodeError:
                 profile["status_reason"] = [profile["status_reason"]]
-        return profile
+        return {
+            "profile": profile,
+            "team_summary": team_summary,
+            "team_members": team_members,
+            "history_summary": {
+                "job_records": len(jobs),
+                "case_records": len(cases),
+                "review_cases": len(review_cases),
+            },
+            "jobs": jobs,
+            "cases": cases,
+            "review_cases": review_cases,
+        }
