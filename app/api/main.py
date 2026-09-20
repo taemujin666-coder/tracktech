@@ -63,8 +63,6 @@ def technician_profile(technician_id: str) -> dict:
                     "combined_rate": None,
                     "volume_context": "ข้อมูลตัวอย่าง",
                 },
-                "team_summary": None,
-                "team_members": [],
                 "history_summary": {"job_records": 0, "case_records": 0, "review_cases": 0},
                 "jobs": [],
                 "cases": [],

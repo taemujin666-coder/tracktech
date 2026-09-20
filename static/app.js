@@ -31,7 +31,7 @@ const routes = {
   technician: {
     eyebrow: 'TECHNICIAN PROFILE',
     title: 'ข้อมูลรายช่าง',
-    description: 'สรุปผลงาน เปรียบเทียบทีม และตรวจประวัติงานกับเคสจากหลักฐานต้นทาง',
+    description: 'สรุปผลงานและตรวจสอบประวัติงานรายช่างจากหลักฐานต้นทาง',
   },
 };
 
@@ -85,23 +85,51 @@ async function loadDashboard() {
     <td class="reason">${(tech.reasons || []).map(escapeHtml).join(' · ')}</td></tr>`).join('');
 }
 
-function profileMetric(label, value, detail = '', tone = '') {
-  return `<article class="metric ${tone}"><p>${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></article>`;
+function scoreRing(label, value, count, detail, tone = '') {
+  const numericValue = value == null ? 0 : Number(value);
+  const progress = Math.min(Math.max(numericValue * 100, 0), 100);
+  const displayValue = value == null ? 'รอข้อมูล' : rate(value);
+  return `<article class="score-ring-card ${tone}">
+    <div class="score-ring" style="--progress:${progress}" role="img" aria-label="${escapeHtml(label)} ${escapeHtml(displayValue)}">
+      <div class="score-ring__center"><strong>${escapeHtml(displayValue)}</strong><span>${escapeHtml(label)}</span></div>
+    </div>
+    <strong class="score-ring-card__count">${escapeHtml(count)}</strong>
+    <small>${escapeHtml(detail)}</small>
+  </article>`;
+}
+
+function renderJobHistoryRows(jobs) {
+  if (!jobs.length) return '<tr><td colspan="6" class="table-empty">ไม่พบ Order No. ที่ค้นหา</td></tr>';
+  return jobs.map((job) => `
+    <tr><td><strong>${escapeHtml(job.job_no)}</strong></td><td>${formatDate(job.install_date)}</td>
+    <td>${escapeHtml(job.product_model || '—')}</td><td>${escapeHtml(job.project_name || '—')}</td>
+    <td>${escapeHtml(job.qc_result || '—')}</td><td>${escapeHtml(job.job_status || '—')}</td></tr>`).join('');
+}
+
+function bindJobHistorySearch(jobs) {
+  const input = document.querySelector('#jobHistorySearch');
+  const rows = document.querySelector('#jobHistoryRows');
+  const count = document.querySelector('#jobHistoryCount');
+  if (!input || !rows || !count) return;
+
+  const update = () => {
+    const query = input.value.trim().toLocaleLowerCase('th-TH');
+    const matches = query
+      ? jobs.filter((job) => String(job.job_no || '').toLocaleLowerCase('th-TH').includes(query))
+      : jobs;
+    rows.innerHTML = renderJobHistoryRows(matches);
+    count.textContent = query
+      ? `${formatNumber.format(matches.length)} / ${formatNumber.format(jobs.length)} รายการ`
+      : `${formatNumber.format(jobs.length)} รายการ`;
+  };
+
+  input.addEventListener('input', update);
 }
 
 function renderTechnicianProfile(data) {
   const profile = data.profile;
-  const team = data.team_summary;
   const reasons = (profile.status_reason || []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('');
-  const memberRows = (data.team_members || []).map((member) => `
-    <tr><td><a class="tech-link" href="#technician/${encodeURIComponent(member.technician_id)}">${escapeHtml(member.technician_id)}</a></td>
-    <td>${escapeHtml(member.technician_name || '—')}</td><td>${formatNumber.format(member.total_jobs || 0)}</td>
-    <td>${rate(member.combined_rate)}</td><td><span class="pill ${escapeHtml(member.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(member.watchlist_status || 'รอข้อมูล')}</span></td>
-    <td>${escapeHtml(member.volume_context || '—')}</td></tr>`).join('');
-  const jobRows = (data.jobs || []).map((job) => `
-    <tr><td><strong>${escapeHtml(job.job_no)}</strong></td><td>${formatDate(job.install_date)}</td>
-    <td>${escapeHtml(job.product_model || '—')}</td><td>${escapeHtml(job.project_name || '—')}</td>
-    <td>${escapeHtml(job.qc_result || '—')}</td><td>${escapeHtml(job.job_status || '—')}</td></tr>`).join('');
+  const jobs = data.jobs || [];
   const caseRows = (data.cases || []).map((item) => `
     <tr><td><strong>${escapeHtml(item.job_no)}</strong></td><td>${formatDate(item.complaint_date)}</td>
     <td>${escapeHtml(item.issue_category || '—')}</td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
@@ -122,31 +150,27 @@ function renderTechnicianProfile(data) {
     </section>
     <section class="profile-section">
       <div class="section-title"><div><p class="eyebrow">PERFORMANCE SUMMARY</p><h2>ผลการดำเนินงานรายช่าง</h2></div><span class="pill ${escapeHtml(profile.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(profile.watchlist_status || 'รอข้อมูล')}</span></div>
-      <div class="metrics metrics--profile">
-        ${profileMetric('Jobs', formatNumber.format(profile.total_jobs || 0), profile.volume_context || 'รอข้อมูล')}
-        ${profileMetric('Complaints', formatNumber.format(profile.complaint_cases || 0), rate(profile.complaint_rate))}
-        ${profileMetric('Rework Cases', formatNumber.format(profile.rework_cases || 0), rate(profile.rework_rate))}
-        ${profileMetric('QC Fail Cases', formatNumber.format(profile.qc_fail_cases || 0), rate(profile.qc_fail_rate))}
-        ${profileMetric('Combined Rate', rate(profile.combined_rate), 'Complaint + Rework + QC Fail', 'warning')}
-        ${profileMetric('QC Coverage', percent(profile.qc_coverage), `${formatNumber.format(profile.qc_inspected_jobs || 0)} งานมีข้อมูล QC`)}
+      <div class="profile-scoreboard">
+        <article class="profile-volume-card">
+          <p>งานทั้งหมด</p><strong>${formatNumber.format(profile.total_jobs || 0)}</strong>
+          <span>Jobs</span><small>${escapeHtml(profile.volume_context || 'รอข้อมูล')}</small>
+        </article>
+        <div class="score-rings">
+          ${scoreRing('Complaint Rate', profile.complaint_rate, `${formatNumber.format(profile.complaint_cases || 0)} เคส`, 'Complaint Log')}
+          ${scoreRing('Rework Rate', profile.rework_rate, `${formatNumber.format(profile.rework_cases || 0)} เคส`, 'Complaint Log')}
+          ${scoreRing('QC Fail Rate', profile.qc_fail_rate, `${formatNumber.format(profile.qc_fail_cases || 0)} เคส`, 'Job Data')}
+          ${scoreRing('Combined Rate', profile.combined_rate, 'สัญญาณปัญหารวม', 'Complaint + Rework + QC Fail', 'warning')}
+          ${scoreRing('QC Coverage', profile.qc_coverage, `${formatNumber.format(profile.qc_inspected_jobs || 0)} งาน`, 'มีข้อมูล QC', 'coverage')}
+        </div>
       </div>
       ${reasons ? `<ul class="profile-reasons">${reasons}</ul>` : ''}
     </section>
     <section class="panel">
-      <div class="section-title"><div><p class="eyebrow">TEAM SUMMARY</p><h2>${escapeHtml(team?.team || profile.team || 'ยังไม่มีข้อมูล Team')}</h2></div><span class="muted">เปรียบเทียบด้วยนิยาม KPI ชุดเดียวกัน</span></div>
-      ${team ? `<div class="metrics metrics--team">
-        ${profileMetric('สมาชิกทีม', formatNumber.format(team.member_count), `Active ${formatNumber.format(team.active_member_count)}`)}
-        ${profileMetric('Jobs รวม', formatNumber.format(team.total_jobs), 'Job Data')}
-        ${profileMetric('Complaints', formatNumber.format(team.complaint_cases), rate(team.complaint_rate))}
-        ${profileMetric('Rework', formatNumber.format(team.rework_cases), rate(team.rework_rate))}
-        ${profileMetric('QC Fail', formatNumber.format(team.qc_fail_cases), rate(team.qc_fail_rate))}
-        ${profileMetric('Combined Rate ทีม', rate(team.combined_rate), 'Complaint + Rework + QC Fail')}
+      <div class="section-title history-heading">
+        <div><p class="eyebrow">JOB HISTORY</p><h2>ประวัติงานย้อนหลัง</h2></div>
+        <div class="history-tools"><label class="order-search"><span>ค้นหา</span><input id="jobHistorySearch" type="search" placeholder="ค้นหา Order No." autocomplete="off" aria-label="ค้นหา Order No." /></label><span id="jobHistoryCount" class="count-label">${formatNumber.format(data.history_summary.job_records)} รายการ</span></div>
       </div>
-      <div class="table-wrap profile-table"><table><thead><tr><th>Tech ID</th><th>ชื่อช่าง</th><th>Jobs</th><th>Combined Rate</th><th>สถานะ</th><th>Volume</th></tr></thead><tbody>${memberRows || '<tr><td colspan="6">ยังไม่มีสมาชิกทีม</td></tr>'}</tbody></table></div>` : '<p class="muted">Technician Master ยังไม่ได้ระบุ Team สำหรับช่างรายนี้</p>'}
-    </section>
-    <section class="panel">
-      <div class="section-title"><div><p class="eyebrow">JOB HISTORY</p><h2>ประวัติงานย้อนหลัง</h2></div><span class="count-label">${formatNumber.format(data.history_summary.job_records)} รายการ</span></div>
-      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>วันที่ติดตั้ง</th><th>สินค้า</th><th>Project</th><th>QC Result</th><th>Job Status</th></tr></thead><tbody>${jobRows || '<tr><td colspan="6">ไม่พบประวัติงาน</td></tr>'}</tbody></table></div>
+      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>วันที่ติดตั้ง</th><th>สินค้า</th><th>Project</th><th>QC Result</th><th>Job Status</th></tr></thead><tbody id="jobHistoryRows">${renderJobHistoryRows(jobs)}</tbody></table></div>
     </section>
     <section class="panel">
       <div class="section-title"><div><p class="eyebrow">CASE HISTORY</p><h2>ประวัติเคสที่ผูกกับช่างแล้ว</h2></div><span class="count-label">${formatNumber.format(data.history_summary.case_records)} เคส</span></div>
@@ -157,6 +181,7 @@ function renderTechnicianProfile(data) {
       <p class="muted">Tech ID ขัดกับ Job Data หรือยังหา Job No. ไม่พบ จึงแสดงเป็นหลักฐานแต่ไม่รวมใน Combined Rate</p>
       ${reviewRows ? `<div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>Complaint Date</th><th>ประเภทปัญหา</th><th>เหตุผลพักตรวจ</th><th>สถานะ</th></tr></thead><tbody>${reviewRows}</tbody></table></div>` : '<div class="empty-state">ไม่มีเคสที่ต้องพักตรวจสำหรับช่างรายนี้</div>'}
     </section>`;
+  bindJobHistorySearch(jobs);
 }
 
 async function loadTechnicianProfile(technicianId) {

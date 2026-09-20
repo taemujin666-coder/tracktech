@@ -98,59 +98,6 @@ TECHNICIAN_PROFILE_QUERY = """
 """
 
 
-TEAM_SUMMARY_QUERY = """
-    WITH selected_team AS (
-      SELECT %s::text AS team_name
-    ), members AS (
-      SELECT t.technician_id, t.active
-      FROM technicians t
-      JOIN selected_team st ON t.team = st.team_name
-    ), jobs AS (
-      SELECT count(*)::integer AS total_jobs,
-        count(*) FILTER (
-          WHERE lower(coalesce(j.qc_result, '')) = 'fail'
-        )::integer AS qc_fail_cases
-      FROM job_records j
-      JOIN members m ON m.technician_id = j.technician_id
-      WHERE j.technician_identity_status = 'VERIFIED'
-    ), cases AS (
-      SELECT count(*)::integer AS complaint_cases,
-        count(*) FILTER (WHERE c.rework IS TRUE)::integer AS rework_cases
-      FROM case_records c
-      JOIN members m ON m.technician_id = c.technician_id
-      WHERE c.technician_identity_status = 'VERIFIED'
-        AND c.link_status NOT IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
-    )
-    SELECT st.team_name AS team,
-      (SELECT count(*)::integer FROM members) AS member_count,
-      (SELECT count(*) FILTER (WHERE active)::integer FROM members) AS active_member_count,
-      jobs.total_jobs, cases.complaint_cases, cases.rework_cases, jobs.qc_fail_cases,
-      round(cases.complaint_cases::numeric / nullif(jobs.total_jobs, 0), 4) AS complaint_rate,
-      round(cases.rework_cases::numeric / nullif(jobs.total_jobs, 0), 4) AS rework_rate,
-      round(jobs.qc_fail_cases::numeric / nullif(jobs.total_jobs, 0), 4) AS qc_fail_rate,
-      round(
-        (cases.complaint_cases + cases.rework_cases + jobs.qc_fail_cases)::numeric
-        / nullif(jobs.total_jobs, 0), 4
-      ) AS combined_rate
-    FROM selected_team st CROSS JOIN jobs CROSS JOIN cases
-"""
-
-
-TEAM_MEMBERS_QUERY = """
-    SELECT t.technician_id, t.technician_name, t.active,
-           s.total_jobs, s.complaint_cases, s.rework_cases, s.qc_fail_cases,
-           s.combined_rate, s.watchlist_status, s.volume_context
-    FROM technicians t
-    LEFT JOIN LATERAL (
-      SELECT * FROM performance_snapshots p
-      WHERE p.technician_id = t.technician_id
-      ORDER BY p.snapshot_date DESC LIMIT 1
-    ) s ON TRUE
-    WHERE t.team = %s
-    ORDER BY s.combined_rate DESC NULLS LAST, t.technician_id
-"""
-
-
 TECHNICIAN_JOBS_QUERY = """
     SELECT job_no, install_date, product_model, project_name, vendor_name,
            qc_date, qc_result, qc_evidence_status, job_status
@@ -340,13 +287,6 @@ class PostgresPerformanceReader:
                 if not row:
                     return None
                 profile = dict(row)
-                team_summary = None
-                team_members: list[dict] = []
-                if profile.get("team"):
-                    cursor.execute(TEAM_SUMMARY_QUERY, (profile["team"],))
-                    team_summary = dict(cursor.fetchone())
-                    cursor.execute(TEAM_MEMBERS_QUERY, (profile["team"],))
-                    team_members = [dict(member) for member in cursor.fetchall()]
                 cursor.execute(TECHNICIAN_JOBS_QUERY, (technician_id,))
                 jobs = [dict(job) for job in cursor.fetchall()]
                 cursor.execute(TECHNICIAN_CASES_QUERY, (technician_id,))
@@ -361,8 +301,6 @@ class PostgresPerformanceReader:
                 profile["status_reason"] = [profile["status_reason"]]
         return {
             "profile": profile,
-            "team_summary": team_summary,
-            "team_members": team_members,
             "history_summary": {
                 "job_records": len(jobs),
                 "case_records": len(cases),
