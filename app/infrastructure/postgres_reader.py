@@ -294,6 +294,8 @@ class PostgresPerformanceReader:
                 cursor.execute(TECHNICIAN_REVIEW_CASES_QUERY, (technician_id,))
                 review_cases = [dict(case) for case in cursor.fetchall()]
 
+        profile["service_mind_cases"] = sum(case.get("service_mind") is True for case in cases)
+
         if isinstance(profile.get("status_reason"), str):
             try:
                 profile["status_reason"] = json.loads(profile["status_reason"])

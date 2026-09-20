@@ -61,6 +61,7 @@ def technician_profile(technician_id: str) -> dict:
                     "rework_rate": None,
                     "qc_fail_rate": None,
                     "combined_rate": None,
+                    "service_mind_cases": 0,
                     "volume_context": "ข้อมูลตัวอย่าง",
                 },
                 "history_summary": {"job_records": 0, "case_records": 0, "review_cases": 0},

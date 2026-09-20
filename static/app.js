@@ -85,16 +85,37 @@ async function loadDashboard() {
     <td class="reason">${(tech.reasons || []).map(escapeHtml).join(' · ')}</td></tr>`).join('');
 }
 
-function scoreRing(label, value, count, detail, tone = '') {
-  const numericValue = value == null ? 0 : Number(value);
-  const progress = Math.min(Math.max(numericValue * 100, 0), 100);
-  const displayValue = value == null ? 'รอข้อมูล' : rate(value);
-  return `<article class="score-ring-card ${tone}">
-    <div class="score-ring" style="--progress:${progress}" role="img" aria-label="${escapeHtml(label)} ${escapeHtml(displayValue)}">
-      <div class="score-ring__center"><strong>${escapeHtml(displayValue)}</strong><span>${escapeHtml(label)}</span></div>
-    </div>
-    <strong class="score-ring-card__count">${escapeHtml(count)}</strong>
+function countCard(label, value, unit, detail, tone = '') {
+  return `<article class="issue-count-card ${tone}">
+    <p>${escapeHtml(label)}</p>
+    <div><strong>${formatNumber.format(value || 0)}</strong><span>${escapeHtml(unit)}</span></div>
     <small>${escapeHtml(detail)}</small>
+  </article>`;
+}
+
+function combinedSignalCard(profile) {
+  const segments = [
+    { label: 'Complaint', count: Number(profile.complaint_cases || 0), className: 'complaint' },
+    { label: 'Rework', count: Number(profile.rework_cases || 0), className: 'rework' },
+    { label: 'QC Fail', count: Number(profile.qc_fail_cases || 0), className: 'qc-fail' },
+  ];
+  const total = segments.reduce((sum, item) => sum + item.count, 0);
+  const complaintEnd = total ? (segments[0].count / total) * 100 : 0;
+  const reworkEnd = total ? complaintEnd + (segments[1].count / total) * 100 : 0;
+  const signalEnd = total ? 100 : 0;
+  const legend = segments.map((item) => {
+    const share = total ? (item.count / total) * 100 : 0;
+    return `<li><span class="donut-dot ${item.className}"></span><span>${item.label}</span><strong>${formatNumber.format(item.count)} · ${share.toFixed(1)}%</strong></li>`;
+  }).join('');
+  return `<article class="combined-signal-card">
+    <div class="combined-signal-card__heading"><div><p>COMBINED RATE</p><h3>สัญญาณปัญหารวม</h3></div><span>${formatNumber.format(total)} signals</span></div>
+    <div class="combined-signal-card__body">
+      <div class="combined-donut" style="--complaint-end:${complaintEnd};--rework-end:${reworkEnd};--signal-end:${signalEnd}" role="img" aria-label="Combined Rate ${escapeHtml(rate(profile.combined_rate))}">
+        <div class="combined-donut__center"><strong>${escapeHtml(rate(profile.combined_rate))}</strong><span>Combined Rate</span></div>
+      </div>
+      <ul class="donut-legend">${legend}</ul>
+    </div>
+    <small>สัดส่วนในวงกลมแสดง Contribution ของแต่ละหัวข้อ · รายการเดียวอาจเกิดได้มากกว่า 1 signal</small>
   </article>`;
 }
 
@@ -132,7 +153,7 @@ function renderTechnicianProfile(data) {
   const jobs = data.jobs || [];
   const caseRows = (data.cases || []).map((item) => `
     <tr><td><strong>${escapeHtml(item.job_no)}</strong></td><td>${formatDate(item.complaint_date)}</td>
-    <td>${escapeHtml(item.issue_category || '—')}</td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
+    <td>${formatDate(item.close_date)}</td><td>${escapeHtml(item.issue_category || '—')}</td><td>${item.rework === true ? 'Yes' : item.rework === false ? 'No' : '—'}</td>
     <td>${escapeHtml(item.root_cause_type || item.root_cause_status || 'รอตรวจสอบ')}</td>
     <td>${escapeHtml(item.case_status || '—')}</td><td>${escapeHtml(item.immediate_action || '—')}</td></tr>`).join('');
   const reviewRows = (data.review_cases || []).map((item) => `
@@ -151,16 +172,14 @@ function renderTechnicianProfile(data) {
     <section class="profile-section">
       <div class="section-title"><div><p class="eyebrow">PERFORMANCE SUMMARY</p><h2>ผลการดำเนินงานรายช่าง</h2></div><span class="pill ${escapeHtml(profile.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(profile.watchlist_status || 'รอข้อมูล')}</span></div>
       <div class="profile-scoreboard">
-        <article class="profile-volume-card">
-          <p>งานทั้งหมด</p><strong>${formatNumber.format(profile.total_jobs || 0)}</strong>
-          <span>Jobs</span><small>${escapeHtml(profile.volume_context || 'รอข้อมูล')}</small>
-        </article>
-        <div class="score-rings">
-          ${scoreRing('Complaint Rate', profile.complaint_rate, `${formatNumber.format(profile.complaint_cases || 0)} เคส`, 'Complaint Log')}
-          ${scoreRing('Rework Rate', profile.rework_rate, `${formatNumber.format(profile.rework_cases || 0)} เคส`, 'Complaint Log')}
-          ${scoreRing('QC Fail Rate', profile.qc_fail_rate, `${formatNumber.format(profile.qc_fail_cases || 0)} เคส`, 'Job Data')}
-          ${scoreRing('Combined Rate', profile.combined_rate, 'สัญญาณปัญหารวม', 'Complaint + Rework + QC Fail', 'warning')}
-          ${scoreRing('QC Coverage', profile.qc_coverage, `${formatNumber.format(profile.qc_inspected_jobs || 0)} งาน`, 'มีข้อมูล QC', 'coverage')}
+        ${combinedSignalCard(profile)}
+        <div class="issue-counts">
+          ${countCard('Jobs ทั้งหมด', profile.total_jobs, 'งาน', profile.volume_context || 'รอข้อมูล', 'jobs')}
+          ${countCard('Complaint', profile.complaint_cases, 'เคส', 'Complaint Log', 'complaint')}
+          ${countCard('Rework', profile.rework_cases, 'เคส', 'Complaint Log', 'rework')}
+          ${countCard('QC Fail', profile.qc_fail_cases, 'งาน', 'Job Data', 'qc-fail')}
+          ${countCard('Service Mind', profile.service_mind_cases, 'เคส', 'ข้อมูลประกอบ · ไม่รวม Combined Rate', 'service-mind')}
+          ${countCard('QC มีหลักฐาน', profile.qc_inspected_jobs, 'งาน', `Coverage ${percent(profile.qc_coverage)}`, 'coverage')}
         </div>
       </div>
       ${reasons ? `<ul class="profile-reasons">${reasons}</ul>` : ''}
@@ -174,7 +193,7 @@ function renderTechnicianProfile(data) {
     </section>
     <section class="panel">
       <div class="section-title"><div><p class="eyebrow">CASE HISTORY</p><h2>ประวัติเคสที่ผูกกับช่างแล้ว</h2></div><span class="count-label">${formatNumber.format(data.history_summary.case_records)} เคส</span></div>
-      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>Complaint Date</th><th>ประเภทปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="7">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
+      <div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>วันที่รับเรื่อง</th><th>วันที่แก้ไข</th><th>ประเภทปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="8">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
     </section>
     <section class="panel review-panel">
       <div class="section-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>เคสที่ยังไม่นับเข้าคะแนน</h2></div><span class="count-label">${formatNumber.format(data.history_summary.review_cases)} เคส</span></div>

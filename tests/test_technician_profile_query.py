@@ -26,6 +26,10 @@ class TechnicianProfileQueryTest(unittest.TestCase):
     def test_job_history_only_uses_verified_technician_identity(self):
         self.assertIn("technician_identity_status = 'VERIFIED'", TECHNICIAN_JOBS_QUERY)
 
+    def test_case_history_exposes_service_mind_and_close_date(self):
+        self.assertIn("service_mind", TECHNICIAN_CASES_QUERY)
+        self.assertIn("close_date", TECHNICIAN_CASES_QUERY)
+
 
 if __name__ == "__main__":
     unittest.main()
