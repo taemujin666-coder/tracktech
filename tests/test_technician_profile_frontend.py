@@ -27,6 +27,14 @@ class TechnicianProfileFrontendTest(unittest.TestCase):
         self.assertIn("combinedSignalCard(profile)", app_source)
         self.assertIn("conic-gradient", styles)
 
+    def test_combined_signal_donut_shows_counts_without_confusing_percentages(self):
+        app_source = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        card = app_source.split("function combinedSignalCard(profile) {", 1)[1].split("function renderJobHistoryRows", 1)[0]
+        self.assertIn("${formatNumber.format(item.count)} เคส", card)
+        self.assertIn("สัญญาณรวม", card)
+        self.assertNotIn("share.toFixed", card)
+        self.assertNotIn("rate(profile.combined_rate)", card)
+
     def test_case_history_shows_recorded_resolution_date(self):
         app_source = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn("วันที่แก้ไข", app_source)

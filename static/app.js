@@ -129,18 +129,17 @@ function combinedSignalCard(profile) {
   const reworkEnd = total ? complaintEnd + (segments[1].count / total) * 100 : 0;
   const signalEnd = total ? 100 : 0;
   const legend = segments.map((item) => {
-    const share = total ? (item.count / total) * 100 : 0;
-    return `<li><span class="donut-dot ${item.className}"></span><span>${item.label}</span><strong>${formatNumber.format(item.count)} · ${share.toFixed(1)}%</strong></li>`;
+    return `<li><span class="donut-dot ${item.className}"></span><span>${item.label}</span><strong>${formatNumber.format(item.count)} เคส</strong></li>`;
   }).join('');
   return `<article class="combined-signal-card">
-    <div class="combined-signal-card__heading"><div><p>COMBINED RATE</p><h3>สัญญาณปัญหารวม</h3></div><span>${formatNumber.format(total)} signals</span></div>
+    <div class="combined-signal-card__heading"><div><p>ISSUE SIGNALS</p><h3>สัญญาณปัญหารวม</h3></div></div>
     <div class="combined-signal-card__body">
-      <div class="combined-donut" style="--complaint-end:${complaintEnd};--rework-end:${reworkEnd};--signal-end:${signalEnd}" role="img" aria-label="Combined Rate ${escapeHtml(rate(profile.combined_rate))}">
-        <div class="combined-donut__center"><strong>${escapeHtml(rate(profile.combined_rate))}</strong><span>Combined Rate</span></div>
+      <div class="combined-donut" style="--complaint-end:${complaintEnd};--rework-end:${reworkEnd};--signal-end:${signalEnd}" role="img" aria-label="Issue signals ${escapeHtml(formatNumber.format(total))}">
+        <div class="combined-donut__center"><strong>${escapeHtml(formatNumber.format(total))}</strong><span>สัญญาณรวม</span></div>
       </div>
       <ul class="donut-legend">${legend}</ul>
     </div>
-    <small>สัดส่วนในวงกลมแสดง Contribution ของแต่ละหัวข้อ · รายการเดียวอาจเกิดได้มากกว่า 1 signal</small>
+    <small>ขนาดส่วนวงกลมแสดงจำนวนของแต่ละหัวข้อ · เคสเดียวอาจนับได้มากกว่า 1 signal</small>
   </article>`;
 }
 
@@ -226,7 +225,7 @@ function renderTechnicianProfile(data) {
     </section>
     <section class="panel review-panel">
       <div class="section-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>เคสที่ยังไม่นับเข้าคะแนน</h2></div><span class="count-label">${formatNumber.format(data.history_summary.review_cases)} เคส</span></div>
-      <p class="muted">Tech ID ขัดกับ Job Data หรือยังหา Job No. ไม่พบ จึงแสดงเป็นหลักฐานแต่ไม่รวมใน Combined Rate</p>
+      <p class="muted">เคสที่ Tech ID ขัดกับ Job Data หรือยังหา Job No. ไม่พบ จะแสดงแยกไว้ทบทวน; Root Cause และ Action Level จะยังไม่สรุปจากเคสเหล่านี้</p>
       ${reviewRows ? `<div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>Complaint Date</th><th>ประเภทปัญหา</th><th>เหตุผลพักตรวจ</th><th>สถานะ</th></tr></thead><tbody>${reviewRows}</tbody></table></div>` : '<div class="empty-state">ไม่มีเคสที่ต้องพักตรวจสำหรับช่างรายนี้</div>'}
     </section>`;
   bindJobHistorySearch(jobs);
