@@ -11,8 +11,10 @@ from app.domain.scoring import calculate_performance
 class TechnicianSnapshotSource:
     """Evidence-backed aggregates supplied by the read-model adapter.
 
-    The calculation mirrors Performance Summary: job volume and QC Fail come
-    from Job Data; Complaint and Rework come from verified Complaint Log cases.
+    The calculation mirrors the Technician Tracker workbook: job volume comes
+    from Job Data; Complaint, Rework, and QC Fail come from Complaint Log rows
+    assigned to a known technician. Link and identity review flags remain a
+    separate concern for case-level Root Cause and Action Level analysis.
     """
 
     technician_id: str
@@ -42,9 +44,10 @@ class TechnicianSnapshot:
     @property
     def status_reasons(self) -> tuple[str, ...]:
         context = (
-            f"KPI ตาม Performance Summary: Complaint {self.source.complaint_cases}, "
-            f"Rework {self.source.rework_cases} จาก Complaint Log; "
-            f"QC Fail {self.source.qc_fail_cases} จาก Job Data; "
+            f"KPI ตาม Performance Summary: Jobs {self.source.total_jobs} จาก Job Data; "
+            f"Complaint {self.source.complaint_cases}, "
+            f"Rework {self.source.rework_cases}, QC Fail {self.source.qc_fail_cases} "
+            f"จาก Complaint Log ตาม Technician Tracker; "
             f"Combined Rate {self.performance.risk_score or 0:.2f}%"
         )
         return (context, *self.performance.reasons)

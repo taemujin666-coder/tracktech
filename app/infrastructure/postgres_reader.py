@@ -16,10 +16,7 @@ SNAPSHOT_SOURCES_QUERY = """
         count(*) FILTER (WHERE integrity_violation IS TRUE) AS integrity_violations,
         count(*) FILTER (
           WHERE qc_evidence_status = 'RECORDED'
-        ) AS qc_inspected_jobs,
-        count(*) FILTER (
-          WHERE lower(coalesce(qc_result, '')) = 'fail'
-        ) AS qc_fail_cases
+        ) AS qc_inspected_jobs
       FROM job_records
       WHERE technician_id IS NOT NULL
         AND technician_identity_status = 'VERIFIED'
@@ -28,11 +25,13 @@ SNAPSHOT_SOURCES_QUERY = """
     cases_by_technician AS (
       SELECT technician_id,
         count(*) AS complaint_cases,
-        count(*) FILTER (WHERE rework IS TRUE) AS rework_cases
+        count(*) FILTER (WHERE rework IS TRUE) AS rework_cases,
+        count(*) FILTER (
+          WHERE lower(coalesce(qc_result, '')) = 'fail'
+        ) AS qc_fail_cases
       FROM case_records
       WHERE technician_id IS NOT NULL
         AND technician_identity_status = 'VERIFIED'
-        AND link_status NOT IN ('TECHNICIAN_CONFLICT', 'JOB_REFERENCE_REQUIRES_REVIEW')
       GROUP BY technician_id
     )
     SELECT t.technician_id, t.vendor_name,
@@ -41,7 +40,7 @@ SNAPSHOT_SOURCES_QUERY = """
       coalesce(c.complaint_cases, 0)::integer AS complaint_cases,
       coalesce(c.rework_cases, 0)::integer AS rework_cases,
       coalesce(j.qc_inspected_jobs, 0)::integer AS qc_inspected_jobs,
-      coalesce(j.qc_fail_cases, 0)::integer AS qc_fail_cases,
+      coalesce(c.qc_fail_cases, 0)::integer AS qc_fail_cases,
       coalesce(j.integrity_violations, 0)::integer AS integrity_violations
     FROM technicians t
     LEFT JOIN jobs_by_technician j ON j.technician_id = t.technician_id
