@@ -32,8 +32,10 @@
         <div class="overview-note">ดูรายชื่อช่างและเหตุผลการติดตามต่อได้ที่เมนู Watchlist</div>
       </section>
       <section id="watchlist" data-route-section="watchlist" class="route-section panel" hidden>
-        <div class="panel-header"><div><p class="eyebrow">WATCHLIST</p><h2>ทีมที่ต้องติดตาม</h2></div><button id="refresh" type="button">รีเฟรชข้อมูล</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>ชื่อช่าง</th><th>Team</th><th>Vendor</th><th>สถานะ</th><th>Combined Rate</th><th>QC coverage</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
+        <div class="panel-header"><div><p class="eyebrow">WATCHLIST · MONTHLY PILOT</p><h2 id="watchlistPeriod">สิงหาคม 2026</h2></div><button id="refresh" type="button">รีเฟรชข้อมูล</button></div>
+        <p class="muted">T3: Combined Rate มากกว่า 10% · T2: มีอย่างน้อย 3 Order No. ที่ได้รับเรื่องในเดือน · หน้าโปรไฟล์แสดงประวัติสะสม</p>
+        <p id="watchlistSummary" class="muted" aria-live="polite"></p>
+        <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>ชื่อช่าง / ทีม</th><th>Jobs</th><th>Order มีปัญหา</th><th>Complaint</th><th>Rework</th><th>QC Fail</th><th>Combined Rate</th><th>Tier</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
       </section>
       <section id="technician" data-route-section="technician" class="route-section" hidden aria-label="ข้อมูลรายช่าง">
         <div id="technicianProfile" class="profile-loading">กำลังโหลดข้อมูลช่าง…</div>

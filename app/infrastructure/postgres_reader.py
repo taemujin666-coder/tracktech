@@ -4,6 +4,7 @@ import json
 import os
 from datetime import date
 
+from app.application.monthly_watchlist import classify_monthly_watchlist
 from app.application.technician_case_insights import build_technician_case_insights
 from app.application.performance_snapshot import TechnicianSnapshotSource, calculate_snapshots
 
@@ -42,6 +43,40 @@ SNAPSHOT_SOURCES_QUERY = """
       coalesce(j.qc_inspected_jobs, 0)::integer AS qc_inspected_jobs,
       coalesce(c.qc_fail_cases, 0)::integer AS qc_fail_cases,
       coalesce(j.integrity_violations, 0)::integer AS integrity_violations
+    FROM technicians t
+    LEFT JOIN jobs_by_technician j ON j.technician_id = t.technician_id
+    LEFT JOIN cases_by_technician c ON c.technician_id = t.technician_id
+    ORDER BY t.technician_id
+"""
+
+
+MONTHLY_WATCHLIST_QUERY = """
+    WITH period AS (
+      SELECT %s::date AS starts_on,
+             (%s::date + interval '1 month')::date AS ends_on
+    ), jobs_by_technician AS (
+      SELECT j.technician_id, count(*) AS jobs
+      FROM job_records j CROSS JOIN period p
+      WHERE j.install_date >= p.starts_on AND j.install_date < p.ends_on
+        AND j.technician_identity_status = 'VERIFIED'
+      GROUP BY j.technician_id
+    ), cases_by_technician AS (
+      SELECT c.technician_id,
+             count(*) AS complaints,
+             count(DISTINCT c.job_no) AS affected_orders,
+             count(*) FILTER (WHERE c.rework IS TRUE) AS rework,
+             count(*) FILTER (WHERE lower(coalesce(c.qc_result, '')) = 'fail') AS qc_fail
+      FROM case_records c CROSS JOIN period p
+      WHERE c.complaint_date >= p.starts_on AND c.complaint_date < p.ends_on
+        AND c.technician_identity_status = 'VERIFIED'
+      GROUP BY c.technician_id
+    )
+    SELECT t.technician_id, t.technician_name, t.team, t.vendor_name,
+           coalesce(j.jobs, 0)::integer AS jobs,
+           coalesce(c.complaints, 0)::integer AS complaints,
+           coalesce(c.affected_orders, 0)::integer AS affected_orders,
+           coalesce(c.rework, 0)::integer AS rework,
+           coalesce(c.qc_fail, 0)::integer AS qc_fail
     FROM technicians t
     LEFT JOIN jobs_by_technician j ON j.technician_id = t.technician_id
     LEFT JOIN cases_by_technician c ON c.technician_id = t.technician_id
@@ -144,6 +179,28 @@ class PostgresPerformanceReader:
 
     def __init__(self, database_url: str | None = None) -> None:
         self.database_url = database_url or os.environ["TRACKTECH_DATABASE_URL"]
+
+    def monthly_watchlist(self, starts_on: date) -> dict:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(MONTHLY_WATCHLIST_QUERY, (starts_on, starts_on))
+                technicians = []
+                for row in cursor.fetchall():
+                    technician = dict(row)
+                    technician.update(classify_monthly_watchlist(**{
+                        key: technician[key]
+                        for key in ("jobs", "affected_orders", "complaints", "rework", "qc_fail")
+                    }))
+                    technicians.append(technician)
+
+        priority = {"CRITICAL": 0, "WATCHLIST": 1, "INSUFFICIENT_DATA": 2, "NORMAL": 3}
+        technicians.sort(key=lambda item: (
+            priority[item["status"]], -(item["combined_rate"] or 0), -item["affected_orders"], item["technician_id"]
+        ))
+        return {"mode": "live", "month": starts_on.strftime("%Y-%m"), "technicians": technicians}
 
     def dashboard(self) -> dict:
         import psycopg

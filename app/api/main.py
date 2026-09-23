@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 from zipfile import BadZipFile
 
@@ -37,6 +38,20 @@ def health() -> dict:
 @app.get("/api/dashboard")
 def dashboard() -> dict:
     return _reader_data()
+
+
+@app.get("/api/watchlist")
+def monthly_watchlist(month: str = "2026-08") -> dict:
+    try:
+        starts_on = date.fromisoformat(f"{month}-01")
+        if starts_on.strftime("%Y-%m") != month:
+            raise ValueError("Invalid month")
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="ระบุเดือนในรูปแบบ YYYY-MM") from error
+
+    if os.getenv("TRACKTECH_DEMO_MODE", "true").casefold() == "true":
+        return {"mode": "demo", "month": month, "technicians": []}
+    return PostgresPerformanceReader().monthly_watchlist(starts_on)
 
 
 @app.get("/api/technicians/{technician_id}")

@@ -49,6 +49,22 @@ The import endpoint commits the workbook in one transaction and records filename
 
 ## Tests
 
+### Monthly Watchlist pilot
+
+The Watchlist page uses August 2026 as its initial trial month. It counts jobs by
+`Job Data` install date and Complaint, Rework, and QC Fail by `Complaint Log`
+complaint date for each verified technician. Combined Rate is the sum of those
+three case counts divided by jobs in that month, matching Technician Tracker.
+
+- T3 Critical: Combined Rate is strictly greater than 10%, at any job volume.
+- T2 Watchlist: at least three distinct complaint `Order No.` values in the month.
+- With no jobs in the month, the rate is N/A; three distinct problem orders
+  still qualify for T2. One case with multiple signals counts as one order.
+
+The monthly tier identifies teams to follow up. Technician profiles and the YTD
+dashboard continue to show cumulative history. Confirmed Root Cause and Action
+Level remain separate decisions based on case evidence.
+
 ```bash
 python -m unittest discover -s tests -v
 ```

@@ -20,8 +20,8 @@ const routes = {
   },
   watchlist: {
     eyebrow: 'WATCHLIST',
-    title: 'ทีมที่ต้องติดตาม',
-    description: 'ใช้เหตุผลและหลักฐานประกอบการทบทวน ไม่สรุปจากสีสถานะเพียงอย่างเดียว',
+    title: 'ทีมที่ต้องติดตาม · สิงหาคม 2026',
+    description: 'รอบทดสอบรายเดือนตามเกณฑ์ Combined Rate และจำนวน Order ที่ได้รับเรื่อง',
   },
   import: {
     eyebrow: 'EVIDENCE-FIRST IMPORT',
@@ -77,12 +77,25 @@ async function loadDashboard() {
   ];
   document.querySelector('#ytdMetrics').innerHTML = ytdCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
   document.querySelector('#operationalMetrics').innerHTML = operationalCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
-  document.querySelector('#technicianRows').innerHTML = data.technicians.map((tech) => `
+}
+
+async function loadWatchlist() {
+  const response = await fetch('/api/watchlist?month=2026-08');
+  if (!response.ok) throw new Error('ไม่สามารถโหลด Watchlist เดือนสิงหาคมได้');
+  const data = await response.json();
+  const flagged = data.technicians.filter((tech) => ['CRITICAL', 'WATCHLIST'].includes(tech.status));
+  const critical = flagged.filter((tech) => tech.status === 'CRITICAL').length;
+  document.querySelector('#watchlistSummary').textContent = data.mode === 'demo'
+    ? 'โหมดตัวอย่างยังไม่มีข้อมูลรายเดือนจากฐานจริง'
+    : `T3 Critical ${formatNumber.format(critical)} ทีม · T2 Watchlist ${formatNumber.format(flagged.length - critical)} ทีม`;
+  document.querySelector('#technicianRows').innerHTML = flagged.map((tech) => `
     <tr><td><a class="tech-link" href="#technician/${encodeURIComponent(tech.technician_id)}">${escapeHtml(tech.technician_id)}</a></td>
-    <td>${escapeHtml(tech.technician_name || '—')}</td><td>${escapeHtml(tech.team || '—')}</td><td>${escapeHtml(tech.vendor || '—')}</td>
-    <td><span class="pill ${escapeHtml(tech.status)}">${escapeHtml(tech.status)}</span></td>
-    <td>${rate(tech.combined_rate)}</td><td>${percent(tech.qc_coverage)}</td>
-    <td class="reason">${(tech.reasons || []).map(escapeHtml).join(' · ')}</td></tr>`).join('');
+    <td><strong>${escapeHtml(tech.technician_name || '—')}</strong><br><small>${escapeHtml(tech.team || tech.vendor_name || '—')}</small></td>
+    <td>${formatNumber.format(tech.jobs)}</td><td>${formatNumber.format(tech.affected_orders)}</td>
+    <td>${formatNumber.format(tech.complaints)}</td><td>${formatNumber.format(tech.rework)}</td><td>${formatNumber.format(tech.qc_fail)}</td>
+    <td>${tech.combined_rate == null ? 'N/A' : rate(tech.combined_rate)}</td>
+    <td><span class="pill ${escapeHtml(tech.status)}">${tech.status === 'CRITICAL' ? 'T3 Critical' : 'T2 Watchlist'}</span></td>
+    <td class="reason">${escapeHtml(tech.reason)}</td></tr>`).join('') || '<tr><td colspan="10">ไม่มีทีมที่เข้าเกณฑ์ในเดือนนี้</td></tr>';
 }
 
 function countCard(label, value, unit, detail, tone = '') {
@@ -283,7 +296,7 @@ async function uploadFile(endpoint, file) {
   return data;
 }
 
-document.querySelector('#refresh').addEventListener('click', () => loadDashboard().catch(showError));
+document.querySelector('#refresh').addEventListener('click', () => loadWatchlist().catch(showWatchlistError));
 document.querySelector('#workbook').addEventListener('change', (event) => {
   document.querySelector('#fileLabel').textContent = event.target.files[0]?.name || 'เลือกไฟล์ Excel';
   previewedFile = null;
@@ -316,16 +329,18 @@ async function commitImport() {
     const data = await uploadFile('/api/import/commit', previewedFile);
     status.textContent = `บันทึกแล้ว: Jobs ใหม่ ${formatNumber.format(data.jobs_inserted)}, อัปเดต ${formatNumber.format(data.jobs_updated)} · Cases ใหม่ ${formatNumber.format(data.cases_inserted)}, อัปเดต ${formatNumber.format(data.cases_updated)}`;
     await loadDashboard();
+    await loadWatchlist();
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
   }
 }
 
-function showError(error) {
-  document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="8">${escapeHtml(error.message)}</td></tr>`;
+function showWatchlistError(error) {
+  document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="10">${escapeHtml(error.message)}</td></tr>`;
 }
 
 window.addEventListener('hashchange', setRoute);
 setRoute();
-loadDashboard().catch(showError);
+loadDashboard().catch((error) => { document.querySelector('#ytdMetrics').textContent = error.message; });
+loadWatchlist().catch(showWatchlistError);
