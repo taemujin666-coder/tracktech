@@ -34,10 +34,11 @@
     .layout { display: grid; grid-template-columns: 240px minmax(0,1fr); min-height: 100vh; }
     .sidebar { position: sticky; top: 0; height: 100vh; padding: 26px 16px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
     .brand { display: flex; gap: 12px; align-items: center; padding: 0 10px 28px; text-decoration: none; }
-    .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: var(--blue); color: white; font-family: var(--numbers); font-weight: 800; }
+    .brand-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--blue); color: white; font-family: var(--numbers); font-weight: 800; }
     .brand strong { display: block; font-size: 17px; letter-spacing: -.03em; }
     .brand small { display: block; color: var(--muted); font-size: 11px; }
     .nav-label { padding: 4px 11px 9px; color: #94a3b8; font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    .nav-label:not(:first-child) { margin-top: 17px; }
     .nav { display: grid; gap: 4px; }
     .nav a { display: flex; gap: 11px; align-items: center; padding: 11px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 650; }
     .nav a:hover { background: var(--blue-soft); color: var(--blue); }
@@ -152,12 +153,14 @@
 <body>
   <div class="layout">
     <aside class="sidebar" aria-label="เมนูหลัก">
-      <a class="brand" href="#dashboard"><span class="brand-mark">TT</span><span><strong>TrackTech</strong><small>Technician Performance</small></span></a>
-      <div class="nav-label">Workspace</div>
+      <a class="brand" href="#dashboard"><span class="brand-mark">TT</span><span><strong>TrackTech</strong><small>Performance Tracker</small></span></a>
       <nav class="nav" aria-label="การนำทาง">
+        <span class="nav-label">ANALYZE</span>
         <a href="#dashboard" data-nav="dashboard" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
-        <a href="#watchlist" data-nav="watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg>Watchlist</a>
+        <span class="nav-label">MANAGE</span>
+        <a href="#watchlist" data-nav="watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>Watchlist</a>
         <a href="#profile" data-nav="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg>โปรไฟล์ช่าง</a>
+        <span class="nav-label">DATA</span>
         <a href="#cases" data-nav="cases"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>ประวัติเคส</a>
       </nav>
       <p class="sidebar-note">ตัวอย่าง UI สำหรับออกแบบ · ยังไม่เชื่อมต่อฐานข้อมูล TrackTech</p>

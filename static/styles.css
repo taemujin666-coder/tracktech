@@ -28,3 +28,19 @@ main { max-width:1440px; margin-left:250px; padding:42px clamp(24px,5vw,72px) 64
 .watchlist-flag.total .watchlist-flag__icon { background:#eaf2f4; color:#416474; }
 @media (max-width:1180px) { .watchlist-flags { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:620px) { .watchlist-flags { grid-template-columns:1fr; } }
+
+/* Navigation: bright sidebar with the same route behavior as the existing app. */
+.sidebar { background:#fff; color:#1e293b; border-right:1px solid #e2e8f0; }
+.brand { gap:12px; margin-bottom:46px; }
+.brand .brand-mark { width:44px; height:44px; border-radius:50%; color:#fff; background:#2d5cf6; font-family:"Arial Rounded MT Bold",Arial,sans-serif; font-size:1rem; }
+.brand strong { color:#1e293b; font-size:1.12rem; letter-spacing:-.025em; }
+.brand small { color:#64748b; }
+.sidebar nav { gap:5px; }
+.sidebar nav .nav-heading { margin:19px 10px 5px; color:#94a3b8; font-size:.67rem; font-weight:800; letter-spacing:.12em; }
+.sidebar nav .nav-heading:first-child { margin-top:0; }
+.sidebar nav a { display:flex; align-items:center; gap:12px; min-height:44px; padding:10px 12px; border-radius:9px; color:#64748b; font-size:.87rem; font-weight:700; }
+.sidebar nav a svg { width:18px; height:18px; flex:none; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.sidebar nav a:hover:not(.active) { color:#2d5cf6; background:#edf2ff; }
+.sidebar nav a.active { color:#fff; background:#2d5cf6; box-shadow:0 2px 5px rgba(45,92,246,.14); }
+.sidebar-note { border-left-color:#2d5cf6; color:#64748b; }
+@media (max-width:900px) { .brand { margin-bottom:16px; } .sidebar nav .nav-heading { display:none; } .sidebar nav { gap:7px; } .sidebar nav a { white-space:nowrap; } }

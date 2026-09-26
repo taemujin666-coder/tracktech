@@ -7,13 +7,16 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <aside class="sidebar">
-      <div class="brand"><span>TT</span><div><strong>TrackTech</strong><small>Performance Tracker</small></div></div>
-      <nav>
-        <a class="active" data-route="dashboard" href="#dashboard">Dashboard</a>
-        <a data-route="overview" href="#overview">ภาพรวม</a>
-        <a data-route="watchlist" href="#watchlist">Watchlist</a>
-        <a data-route="import" href="#import">นำเข้าข้อมูล</a>
+    <aside class="sidebar" aria-label="เมนูหลัก">
+      <div class="brand"><span class="brand-mark">TT</span><div><strong>TrackTech</strong><small>Performance Tracker</small></div></div>
+      <nav aria-label="การนำทาง">
+        <span class="nav-heading">ANALYZE</span>
+        <a class="active" data-route="dashboard" href="#dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+        <a data-route="overview" href="#overview"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>ภาพรวมปฏิบัติการ</a>
+        <span class="nav-heading">MANAGE</span>
+        <a data-route="watchlist" href="#watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>Watchlist</a>
+        <span class="nav-heading">DATA</span>
+        <a data-route="import" href="#import"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7.5 7.5M12 3l4.5 4.5M4 16v4h16v-4"/></svg>นำเข้าข้อมูล</a>
       </nav>
       <p class="sidebar-note">Evidence First: ข้อมูลที่ไม่มีหลักฐานจะไม่ถูกตีความเป็น Pass, Fail หรือ “ไม่มีปัญหา”</p>
     </aside>
