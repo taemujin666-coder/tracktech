@@ -34,6 +34,11 @@
       <section id="watchlist" data-route-section="watchlist" class="route-section panel" hidden>
         <div class="panel-header"><div><p class="eyebrow">WATCHLIST · MONTHLY PILOT</p><h2 id="watchlistPeriod">สิงหาคม 2026</h2></div><button id="refresh" type="button">รีเฟรชข้อมูล</button></div>
         <p class="muted">T3: Combined Rate มากกว่า 10% · T2: มีอย่างน้อย 3 Order No. ที่ได้รับเรื่องในเดือน · หน้าโปรไฟล์แสดงประวัติสะสม</p>
+        <div class="watchlist-flags" id="watchlistFlags" aria-label="สรุปทีมที่ถูก flag รายเดือน" aria-live="polite">
+          <article class="watchlist-flag critical"><div><p>T3 CRITICAL · RATE &gt; 10%</p><strong>— <small>ทีม</small></strong></div><span class="watchlist-flag__icon" aria-hidden="true">!</span></article>
+          <article class="watchlist-flag watch"><div><p>T2 WATCHLIST · ≥ 3 ORDERS</p><strong>— <small>ทีม</small></strong></div><span class="watchlist-flag__icon" aria-hidden="true">!</span></article>
+          <article class="watchlist-flag total"><div><p>รวมทีมที่ต้องติดตาม</p><strong>— <small>ทีม</small></strong></div><span class="watchlist-flag__icon" aria-hidden="true">●</span></article>
+        </div>
         <p id="watchlistSummary" class="muted" aria-live="polite"></p>
         <div class="table-wrap"><table><thead><tr><th>Tech ID</th><th>ชื่อช่าง / ทีม</th><th>Jobs</th><th>Order มีปัญหา</th><th>Complaint</th><th>Rework</th><th>QC Fail</th><th>Combined Rate</th><th>Tier</th><th>เหตุผล</th></tr></thead><tbody id="technicianRows"></tbody></table></div>
       </section>

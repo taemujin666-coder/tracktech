@@ -16,3 +16,15 @@ main { max-width:1440px; margin-left:250px; padding:42px clamp(24px,5vw,72px) 64
 @media (max-width:700px) { .preview-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:700px) { .issue-counts { grid-template-columns:repeat(2,minmax(0,1fr)); }.history-heading { align-items:flex-start; }.history-tools { width:100%; flex-wrap:wrap; }.order-search { flex:1 1 230px; } }
 @media (max-width:520px) { header { display:block; }.mode { display:inline-block; margin-top:10px; }.metrics,.preview-grid,.issue-counts { grid-template-columns:1fr; }.panel { padding:18px; }.preview-head,.profile-identity,.section-title { align-items:flex-start; }.profile-identity,.section-title { display:block; }.profile-tags { justify-content:flex-start; margin-top:14px; }.combined-signal-card__body { flex-direction:column; }.history-tools { justify-content:flex-start; margin-top:14px; }.order-search { width:100%; min-width:0; } }
+
+.watchlist-flags { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0 14px; }
+.watchlist-flag { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; padding:20px; border:1px solid var(--line); border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+.watchlist-flag p { margin:0 0 8px; color:var(--muted); font-size:.73rem; font-weight:800; letter-spacing:.025em; }
+.watchlist-flag strong { display:block; color:var(--ink); font-size:1.85rem; line-height:1.1; }
+.watchlist-flag small { color:var(--muted); font-size:.82rem; font-weight:600; }
+.watchlist-flag__icon { display:grid; flex:none; place-items:center; width:42px; height:42px; border-radius:9px; font-size:1.2rem; font-weight:900; }
+.watchlist-flag.critical .watchlist-flag__icon { background:#fff0ef; color:#d34236; }
+.watchlist-flag.watch .watchlist-flag__icon { background:#fff6df; color:#ab7100; }
+.watchlist-flag.total .watchlist-flag__icon { background:#eaf2f4; color:#416474; }
+@media (max-width:1180px) { .watchlist-flags { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:620px) { .watchlist-flags { grid-template-columns:1fr; } }

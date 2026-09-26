@@ -85,9 +85,17 @@ async function loadWatchlist() {
   const data = await response.json();
   const flagged = data.technicians.filter((tech) => ['CRITICAL', 'WATCHLIST'].includes(tech.status));
   const critical = flagged.filter((tech) => tech.status === 'CRITICAL').length;
+  const watchlist = flagged.filter((tech) => tech.status === 'WATCHLIST').length;
+  const flagCards = [
+    ['T3 CRITICAL · RATE &gt; 10%', critical, 'critical', '!'],
+    ['T2 WATCHLIST · ≥ 3 ORDERS', watchlist, 'watch', '!'],
+    ['รวมทีมที่ต้องติดตาม', flagged.length, 'total', '●'],
+  ];
+  document.querySelector('#watchlistFlags').innerHTML = flagCards.map(([label, count, tone, icon]) => `
+    <article class="watchlist-flag ${tone}"><div><p>${label}</p><strong>${data.mode === 'demo' ? '—' : formatNumber.format(count)} <small>ทีม</small></strong></div><span class="watchlist-flag__icon" aria-hidden="true">${icon}</span></article>`).join('');
   document.querySelector('#watchlistSummary').textContent = data.mode === 'demo'
     ? 'โหมดตัวอย่างยังไม่มีข้อมูลรายเดือนจากฐานจริง'
-    : `T3 Critical ${formatNumber.format(critical)} ทีม · T2 Watchlist ${formatNumber.format(flagged.length - critical)} ทีม`;
+    : 'นับจากข้อมูลเดือนสิงหาคม 2026 · หนึ่งทีมอยู่ได้เพียงระดับเดียว';
   document.querySelector('#technicianRows').innerHTML = flagged.map((tech) => `
     <tr><td><a class="tech-link" href="#technician/${encodeURIComponent(tech.technician_id)}">${escapeHtml(tech.technician_id)}</a></td>
     <td><strong>${escapeHtml(tech.technician_name || '—')}</strong><br><small>${escapeHtml(tech.team || tech.vendor_name || '—')}</small></td>
@@ -95,7 +103,7 @@ async function loadWatchlist() {
     <td>${formatNumber.format(tech.complaints)}</td><td>${formatNumber.format(tech.rework)}</td><td>${formatNumber.format(tech.qc_fail)}</td>
     <td>${tech.combined_rate == null ? 'N/A' : rate(tech.combined_rate)}</td>
     <td><span class="pill ${escapeHtml(tech.status)}">${tech.status === 'CRITICAL' ? 'T3 Critical' : 'T2 Watchlist'}</span></td>
-    <td class="reason">${escapeHtml(tech.reason)}</td></tr>`).join('') || '<tr><td colspan="10">ไม่มีทีมที่เข้าเกณฑ์ในเดือนนี้</td></tr>';
+    <td class="reason">${escapeHtml(tech.reason)}</td></tr>`).join('') || `<tr><td colspan="10">${data.mode === 'demo' ? 'ยังไม่มีข้อมูล Watchlist รายเดือนในโหมดตัวอย่าง' : 'ไม่มีทีมที่เข้าเกณฑ์ในเดือนนี้'}</td></tr>`;
 }
 
 function countCard(label, value, unit, detail, tone = '') {
