@@ -1,5 +1,6 @@
 const formatNumber = new Intl.NumberFormat('th-TH');
 const evidenceDate = new Intl.DateTimeFormat('th-TH-u-ca-gregory', { day: 'numeric', month: 'short', year: 'numeric' });
+const shortMonth = new Intl.DateTimeFormat('th-TH-u-ca-gregory', { month: 'short' });
 const percent = (value) => value == null ? 'รอข้อมูล' : `${Math.round(value * 100)}%`;
 const rate = (value) => value == null ? 'รอข้อมูล' : `${(Number(value) * 100).toFixed(2)}%`;
 const formatDate = (value) => value ? evidenceDate.format(new Date(`${value}T00:00:00`)) : '—';
@@ -62,21 +63,95 @@ async function loadDashboard() {
   const data = await response.json();
   document.querySelector('#mode').textContent = data.mode === 'demo' ? 'โหมดตัวอย่าง' : 'ข้อมูลจากฐานจริง';
   document.querySelector('#ytdTitle').textContent = `ผลการดำเนินงานสะสมปี ${data.summary.reporting_year || 'ปัจจุบัน'}`;
-  const ytdCards = [
-    ['Jobs', formatNumber.format(data.summary.jobs), 'Job Data', ''],
-    ['Complaints', formatNumber.format(data.summary.complaint_cases), 'Complaint Log', ''],
-    ['Complaint Rate', rate(data.summary.complaint_rate), 'Complaints ÷ Jobs', ''],
-    ['Rework Cases', formatNumber.format(data.summary.rework_cases), 'Complaint Log: Rework = Yes', ''],
-    ['Rework Rate', rate(data.summary.rework_rate), 'Rework Cases ÷ Jobs', ''],
-    ['QC Fail Cases', formatNumber.format(data.summary.qc_fail_cases), 'Job Data: QC Result = Fail', ''],
-    ['QC Fail Rate', rate(data.summary.qc_fail_rate), 'QC Fail Cases ÷ Jobs', ''],
+  const monthly = data.monthly || [];
+  const last = monthly.at(-1), previous = monthly.at(-2);
+  const cards = [
+    ['Jobs', 'jobs', data.summary.jobs, 'Job Data', data.coverage?.jobs_through, true],
+    ['Complaints', 'complaint_cases', data.summary.complaint_cases, 'Complaint Log', data.coverage?.complaints_through, false],
+    ['Reworks', 'rework_cases', data.summary.rework_cases, 'Complaint Log', data.coverage?.complaints_through, false],
+    ['QC Fails', 'qc_fail_cases', data.summary.qc_fail_cases, 'Job Data', data.coverage?.jobs_through, false],
   ];
   const operationalCards = [
     ['Action ที่ยังไม่ปิด', formatNumber.format(data.summary.open_actions), 'ต้องกำหนดหรือดำเนินการติดตาม', 'warning'],
     ['Evidence รอตรวจ', formatNumber.format(data.summary.pending_evidence), 'ยังไม่สรุปว่าเคสปิดหรือไม่มีปัญหา', 'alert'],
   ];
-  document.querySelector('#ytdMetrics').innerHTML = ytdCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
+  document.querySelector('#ytdMetrics').innerHTML = cards.map(([label, key, total, source, through, higherIsBetter]) => {
+    let trend = 'รายเดือนยังไม่มีข้อมูล', tone = 'neutral';
+    if (last && previous && previous[key] > 0 && through?.slice(0, 7) === last.month.slice(0, 7)) {
+      const delta = (last[key] - previous[key]) / previous[key] * 100;
+      const monthStart = new Date(`${last.month}T00:00:00`);
+      const lastDay = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+      const completeMonth = Number(through.slice(-2)) === lastDay;
+      tone = completeMonth && delta !== 0 ? ((delta > 0) === higherIsBetter ? 'good' : 'bad') : 'neutral';
+      trend = `${delta > 0 ? '↑' : delta < 0 ? '↓' : '→'} ${Math.abs(delta).toFixed(1)}% ${shortMonth.format(monthStart)} เทียบเดือนก่อน${completeMonth ? '' : ' · อาจไม่ครบเดือน'}`;
+    }
+    return `<article class="metric dashboard-kpi"><p>${label}</p><strong>${formatNumber.format(total ?? 0)}</strong><div class="kpi-bottom"><span class="kpi-trend ${tone}">${escapeHtml(trend)}</span><small>${source}</small></div></article>`;
+  }).join('');
+  document.querySelector('#dashboardRates').innerHTML = [
+    ['Complaint Rate', data.summary.complaint_rate],
+    ['Rework Rate', data.summary.rework_rate],
+    ['QC Fail Rate', data.summary.qc_fail_rate],
+  ].map(([label, value]) => `<span>${label} <strong>${rate(value)}</strong></span>`).join('');
   document.querySelector('#operationalMetrics').innerHTML = operationalCards.map(([label, value, detail, tone]) => `<article class="metric ${tone}"><p>${label}</p><strong>${value}</strong><small>${detail}</small></article>`).join('');
+  renderDashboardChart(monthly, data.coverage || {}, data.mode);
+}
+
+function renderDashboardChart(monthly, coverage, mode) {
+  const target = document.querySelector('#dashboardChart');
+  const description = document.querySelector('#dashboardCoverage');
+  const rows = document.querySelector('#dashboardChartData tbody');
+  if (!monthly.length) {
+    target.innerHTML = '<div class="chart-empty">ยังไม่มีข้อมูลรายเดือนจากฐานจริงสำหรับแสดงกราฟ</div>';
+    rows.innerHTML = '';
+    description.textContent = mode === 'demo' ? 'โหมดตัวอย่างไม่มีกราฟรายเดือน: ไม่สร้างแนวโน้มจากข้อมูลสมมติ' : 'กราฟจะแสดงเมื่อมี Job Data หรือ Complaint Log ของปีนี้';
+    return;
+  }
+  const width = 840, height = 325, left = 55, right = 55, top = 38, bottom = 49;
+  const plotWidth = width - left - right, plotHeight = height - top - bottom, band = plotWidth / monthly.length;
+  const niceScale = values => {
+    const highest = Math.max(1, ...values), base = Math.max(1, 10 ** Math.floor(Math.log10(highest / 4)));
+    return Math.ceil(highest / 4 / base) * base * 4;
+  };
+  const maxJobs = niceScale(monthly.map(item => item.jobs));
+  const maxRework = niceScale(monthly.map(item => item.rework_cases));
+  const lastReworkMonth = coverage.complaints_through?.slice(0, 7);
+  const x = index => left + band * (index + .5);
+  const yJobs = value => top + plotHeight * (1 - value / maxJobs);
+  const yRework = value => top + plotHeight * (1 - value / maxRework);
+  const grid = Array.from({length:5}, (_, i) => {
+    const jobs = maxJobs / 4 * i, reworks = maxRework / 4 * i;
+    return `<line x1="${left}" x2="${width-right}" y1="${yJobs(jobs)}" y2="${yJobs(jobs)}" stroke="#e2e8f0"/><text x="${left-12}" y="${yJobs(jobs)+4}" text-anchor="end" fill="#64748b" font-size="10" font-family="Arial Rounded MT, Arial, sans-serif">${formatNumber.format(jobs)}</text><text x="${width-right+12}" y="${yRework(reworks)+4}" fill="#926000" font-size="10" font-family="Arial Rounded MT, Arial, sans-serif">${formatNumber.format(reworks)}</text>`;
+  }).join('');
+  const bars = monthly.map((item, i) => {
+    const barWidth = Math.min(46, band * .52);
+    const label = shortMonth.format(new Date(`${item.month}T00:00:00`));
+    return `<rect x="${x(i)-barWidth/2}" y="${yJobs(item.jobs)}" width="${barWidth}" height="${top+plotHeight-yJobs(item.jobs)}" rx="5" fill="${i === monthly.length-1 ? '#2149d9' : '#2d5cf6'}"><title>${escapeHtml(label)}: ${formatNumber.format(item.jobs)} Jobs</title></rect><text x="${x(i)}" y="${height-14}" text-anchor="middle" fill="#64748b" font-size="11" font-family="Thonburi, Sarabun, sans-serif">${escapeHtml(label)}</text>`;
+  }).join('');
+  const points = monthly.map((item,i) => item.month.slice(0,7) <= (lastReworkMonth || '') ? {x:x(i),y:yRework(item.rework_cases),count:item.rework_cases} : null);
+  const valid = points.filter(Boolean);
+  const path = valid.slice(1).reduce((acc,point,i) => {
+    const previous = valid[i], midpoint = (previous.x + point.x) / 2;
+    return `${acc} C ${midpoint} ${previous.y}, ${midpoint} ${point.y}, ${point.x} ${point.y}`;
+  }, valid.length ? `M ${valid[0].x} ${valid[0].y}` : '');
+  const line = valid.length > 1 ? `<path d="${path}" fill="none" stroke="#b77900" stroke-width="3.5" stroke-linecap="round"/>` : '';
+  const dots = valid.map(point => `<circle cx="${point.x}" cy="${point.y}" r="6" fill="#eab308" stroke="#fff" stroke-width="2.5"><title>${formatNumber.format(point.count)} Rework cases</title></circle>`).join('');
+  const titles = `<text x="${left}" y="16" fill="#64748b" font-size="10" font-family="Thonburi, Sarabun, sans-serif">Jobs (งาน)</text><text x="${width-right}" y="16" text-anchor="end" fill="#926000" font-size="10" font-family="Thonburi, Sarabun, sans-serif">Rework (เคส)</text>`;
+  target.innerHTML = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${grid}${titles}${bars}${line}${dots}<line id="comboHoverLine" y1="${top}" y2="${top+plotHeight}" stroke="#94a3b8" stroke-dasharray="3 4" visibility="hidden"/></svg><div class="combo-tooltip" id="comboTooltip" hidden></div>`;
+  rows.innerHTML = monthly.map(item => `<tr><td>${escapeHtml(item.month)}</td><td>${formatNumber.format(item.jobs)}</td><td>${item.month.slice(0,7) <= (lastReworkMonth || '') ? formatNumber.format(item.rework_cases) : 'ยังไม่มีข้อมูล'}</td></tr>`).join('');
+  description.textContent = `Job Data ล่าสุด ${formatDate(coverage.jobs_through)} · Complaint Log ล่าสุด ${formatDate(coverage.complaints_through)} · เดือนที่ข้อมูลยังไม่ครบแสดงแนวโน้มเบื้องต้น`;
+  const svg = target.querySelector('svg'), tooltip = target.querySelector('#comboTooltip'), hover = target.querySelector('#comboHoverLine');
+  svg.addEventListener('pointermove', event => {
+    const bounds = svg.getBoundingClientRect(), cursor = (event.clientX - bounds.left) / bounds.width * width;
+    if (cursor < left || cursor > width-right) { tooltip.hidden = true; hover.setAttribute('visibility','hidden'); return; }
+    const i = Math.min(monthly.length-1, Math.floor((cursor-left)/band)), item = monthly[i];
+    const rework = points[i] ? `${formatNumber.format(item.rework_cases)} เคส` : 'ยังไม่มีข้อมูล';
+    tooltip.innerHTML = `<strong>${escapeHtml(shortMonth.format(new Date(`${item.month}T00:00:00`)))} ${item.month.slice(0,4)}</strong><span>Jobs: ${formatNumber.format(item.jobs)} งาน</span><span>Rework: ${rework}</span>`;
+    tooltip.style.left = `${Math.max(6, Math.min(bounds.width-153, x(i)/width*bounds.width-70))}px`;
+    tooltip.style.top = `${Math.max(32, (points[i]?.y || top+40)/height*bounds.height-86)}px`;
+    tooltip.hidden = false;
+    hover.setAttribute('x1',x(i)); hover.setAttribute('x2',x(i)); hover.setAttribute('visibility','visible');
+  });
+  svg.addEventListener('pointerleave', () => { tooltip.hidden = true; hover.setAttribute('visibility','hidden'); });
 }
 
 async function loadWatchlist() {
@@ -109,7 +184,7 @@ async function loadWatchlist() {
 function countCard(label, value, unit, detail, tone = '') {
   return `<article class="issue-count-card ${tone}">
     <p>${escapeHtml(label)}</p>
-    <div><strong>${formatNumber.format(value || 0)}</strong><span>${escapeHtml(unit)}</span></div>
+    <div><strong>${value == null ? '—' : formatNumber.format(value)}</strong><span>${escapeHtml(unit)}</span></div>
     <small>${escapeHtml(detail)}</small>
   </article>`;
 }
@@ -141,26 +216,18 @@ function actionLevelCard(actionLevel) {
 
 function combinedSignalCard(profile) {
   const segments = [
-    { label: 'Complaint', count: Number(profile.complaint_cases || 0), className: 'complaint' },
-    { label: 'Rework', count: Number(profile.rework_cases || 0), className: 'rework' },
-    { label: 'QC Fail', count: Number(profile.qc_fail_cases || 0), className: 'qc-fail' },
+    { label: 'Complaint', count: profile.complaint_cases, className: 'complaint' },
+    { label: 'Rework', count: profile.rework_cases, className: 'rework' },
+    { label: 'QC Fail', count: profile.qc_fail_cases, className: 'qc-fail' },
   ];
-  const total = segments.reduce((sum, item) => sum + item.count, 0);
-  const complaintEnd = total ? (segments[0].count / total) * 100 : 0;
-  const reworkEnd = total ? complaintEnd + (segments[1].count / total) * 100 : 0;
-  const signalEnd = total ? 100 : 0;
-  const legend = segments.map((item) => {
-    return `<li><span class="donut-dot ${item.className}"></span><span>${item.label}</span><strong>${formatNumber.format(item.count)} เคส</strong></li>`;
-  }).join('');
+  const available = segments.every(item => item.count != null);
+  const total = available ? segments.reduce((sum,item) => sum + Number(item.count),0) : null;
+  const largest = Math.max(1, ...segments.map(item => Number(item.count || 0)));
+  const bars = segments.map(item => `<div class="signal-row ${item.className}"><span>${item.label}</span><span class="signal-track"><span style="width:${available ? Number(item.count)/largest*100 : 0}%"></span></span><strong>${available ? formatNumber.format(item.count) + ' เคส' : '—'}</strong></div>`).join('');
   return `<article class="combined-signal-card">
-    <div class="combined-signal-card__heading"><div><p>ISSUE SIGNALS</p><h3>สัญญาณปัญหารวม</h3></div></div>
-    <div class="combined-signal-card__body">
-      <div class="combined-donut" style="--complaint-end:${complaintEnd};--rework-end:${reworkEnd};--signal-end:${signalEnd}" role="img" aria-label="Issue signals ${escapeHtml(formatNumber.format(total))}">
-        <div class="combined-donut__center"><strong>${escapeHtml(formatNumber.format(total))}</strong><span>สัญญาณรวม</span></div>
-      </div>
-      <ul class="donut-legend">${legend}</ul>
-    </div>
-    <small>ขนาดส่วนวงกลมแสดงจำนวนของแต่ละหัวข้อ · เคสเดียวอาจนับได้มากกว่า 1 signal</small>
+    <div class="combined-signal-card__heading"><div><p>ISSUE SIGNALS · สะสม</p><h3>สัญญาณปัญหารวม</h3></div><div class="signal-total"><strong>${total == null ? '—' : formatNumber.format(total)}</strong><span>สัญญาณ</span></div></div>
+    <div class="signal-rows">${bars}</div>
+    <small>Complaint, Rework และ QC Fail ในโปรไฟล์อ้างอิง Complaint Log · เคสเดียวอาจเกิดมากกว่า 1 สัญญาณ ผลรวมไม่ใช่จำนวนเคสไม่ซ้ำ</small>
   </article>`;
 }
 
@@ -218,7 +285,7 @@ function renderTechnicianProfile(data) {
       <div class="profile-tags"><span>${escapeHtml(profile.team || 'ไม่มี Team')}</span><span>${escapeHtml(profile.vendor_name || 'ไม่มี Vendor')}</span><span>${profile.active ? 'Active' : 'Inactive'}</span></div>
     </section>
     <section class="profile-section">
-      <div class="section-title"><div><p class="eyebrow">PERFORMANCE SUMMARY</p><h2>ผลการดำเนินงานรายช่าง</h2></div><span class="pill ${escapeHtml(profile.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(profile.watchlist_status || 'รอข้อมูล')}</span></div>
+      <div class="section-title"><div><p class="eyebrow">PERFORMANCE SUMMARY · สะสม</p><h2>ผลการดำเนินงานรายช่าง</h2></div><span class="pill ${escapeHtml(profile.watchlist_status || 'INSUFFICIENT_DATA')}">${escapeHtml(profile.watchlist_status || 'รอข้อมูล')} · สะสม</span></div>
       <div class="profile-scoreboard">
         ${combinedSignalCard(profile)}
         <div class="issue-counts">

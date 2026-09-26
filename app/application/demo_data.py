@@ -26,6 +26,8 @@ def dashboard_demo() -> dict:
             "open_actions": 17,
             "pending_evidence": 6,
         },
+        "monthly": [],
+        "coverage": {"jobs_through": None, "complaints_through": None},
         "technicians": [
             {
                 "technician_id": result.technician_id,

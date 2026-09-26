@@ -49,6 +49,13 @@ The import endpoint commits the workbook in one transaction and records filename
 
 ## Tests
 
+The live Dashboard renders a monthly Jobs/Rework combo chart from PostgreSQL.
+Jobs and QC Fail follow `Job Data` install dates; Complaints and Rework follow
+`Complaint Log` complaint dates. Source recency is shown beside the chart; a
+partially observed month is labelled preliminary. Technician profile signal
+bars continue to use Complaint Log counts from the imported snapshot and are
+cumulative, independently of the monthly Watchlist pilot.
+
 ### Monthly Watchlist pilot
 
 The Watchlist page uses August 2026 as its initial trial month. It counts jobs by

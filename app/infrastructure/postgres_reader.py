@@ -115,6 +115,64 @@ DASHBOARD_SUMMARY_QUERY = """
 """
 
 
+DASHBOARD_MONTHLY_QUERY = """
+    WITH reporting_period AS (
+      SELECT date_trunc('year', current_date)::date AS starts_on,
+             (date_trunc('year', current_date) + interval '1 year')::date AS ends_on
+    ), monthly_sources AS (
+      SELECT date_trunc('month', j.install_date)::date AS month,
+             count(*)::integer AS jobs,
+             0::integer AS complaint_cases,
+             0::integer AS rework_cases,
+             count(*) FILTER (WHERE lower(coalesce(j.qc_result, '')) = 'fail')::integer AS qc_fail_cases
+      FROM job_records j CROSS JOIN reporting_period p
+      WHERE j.install_date >= p.starts_on AND j.install_date < p.ends_on
+      GROUP BY 1
+      UNION ALL
+      SELECT date_trunc('month', c.complaint_date)::date AS month,
+             0::integer AS jobs,
+             count(*)::integer AS complaint_cases,
+             count(*) FILTER (WHERE c.rework IS TRUE)::integer AS rework_cases,
+             0::integer AS qc_fail_cases
+      FROM case_records c CROSS JOIN reporting_period p
+      WHERE c.complaint_date >= p.starts_on AND c.complaint_date < p.ends_on
+      GROUP BY 1
+    )
+    SELECT month, sum(jobs)::integer AS jobs,
+           sum(complaint_cases)::integer AS complaint_cases,
+           sum(rework_cases)::integer AS rework_cases,
+           sum(qc_fail_cases)::integer AS qc_fail_cases
+    FROM monthly_sources
+    GROUP BY month ORDER BY month
+"""
+
+
+DASHBOARD_COVERAGE_QUERY = """
+    WITH period AS (SELECT date_trunc('year', current_date)::date AS starts_on,
+                          (date_trunc('year', current_date) + interval '1 year')::date AS ends_on)
+    SELECT (SELECT max(install_date) FROM job_records
+            WHERE install_date >= starts_on AND install_date < ends_on) AS jobs_through,
+           (SELECT max(complaint_date) FROM case_records
+            WHERE complaint_date >= starts_on AND complaint_date < ends_on) AS complaints_through
+    FROM period
+"""
+
+
+def fill_dashboard_months(rows: list[dict], year: int) -> list[dict]:
+    """Show months from January through the latest imported month, including gaps."""
+    by_month = {row["month"].month: row for row in rows}
+    if not by_month:
+        return []
+    return [
+        {
+            "month": date(year, month, 1).isoformat(),
+            **{key: int(by_month.get(month, {}).get(key, 0)) for key in
+               ("jobs", "complaint_cases", "rework_cases", "qc_fail_cases")},
+        }
+        for month in range(1, max(by_month) + 1)
+    ]
+
+
 TECHNICIAN_PROFILE_QUERY = """
     SELECT t.technician_id, t.technician_name, t.team, t.vendor_name,
            t.area, t.active, t.source_status,
@@ -212,6 +270,10 @@ class PostgresPerformanceReader:
                     DASHBOARD_SUMMARY_QUERY
                 )
                 summary = dict(cursor.fetchone())
+                cursor.execute(DASHBOARD_MONTHLY_QUERY)
+                monthly = fill_dashboard_months([dict(row) for row in cursor.fetchall()], summary["reporting_year"])
+                cursor.execute(DASHBOARD_COVERAGE_QUERY)
+                coverage = dict(cursor.fetchone())
                 cursor.execute(
                     """
                     SELECT p.technician_id, t.technician_name, t.team,
@@ -232,7 +294,8 @@ class PostgresPerformanceReader:
                             technician["reasons"] = json.loads(reasons)
                         except json.JSONDecodeError:
                             technician["reasons"] = [reasons]
-        return {"mode": "live", "summary": summary, "technicians": technicians}
+        return {"mode": "live", "summary": summary, "monthly": monthly, "coverage": coverage,
+                "technicians": technicians}
 
     def refresh_snapshot(self, snapshot_date: date | None = None) -> dict:
         """Persist the approved Combined Rate snapshot from Performance Summary sources."""

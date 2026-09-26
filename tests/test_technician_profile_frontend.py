@@ -19,19 +19,22 @@ class TechnicianProfileFrontendTest(unittest.TestCase):
         for label in ("JOB HISTORY", "CASE HISTORY", "HUMAN REVIEW"):
             self.assertIn(label, app_source)
 
-    def test_profile_has_order_search_and_combined_donut(self):
+    def test_profile_has_order_search_and_signal_bars(self):
         app_source = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
         styles = (ROOT / "static" / "styles.css").read_text(encoding="utf-8")
         self.assertIn('id="jobHistorySearch"', app_source)
         self.assertIn("job.job_no", app_source)
         self.assertIn("combinedSignalCard(profile)", app_source)
-        self.assertIn("conic-gradient", styles)
+        self.assertIn(".signal-track", styles)
+        self.assertNotIn("conic-gradient", styles)
 
-    def test_combined_signal_donut_shows_counts_without_confusing_percentages(self):
+    def test_combined_signals_show_counts_without_confusing_percentages(self):
         app_source = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
         card = app_source.split("function combinedSignalCard(profile) {", 1)[1].split("function renderJobHistoryRows", 1)[0]
-        self.assertIn("${formatNumber.format(item.count)} เคส", card)
-        self.assertIn("สัญญาณรวม", card)
+        self.assertIn("สัญญาณปัญหารวม", card)
+        self.assertIn("signal-row", card)
+        self.assertIn("ผลรวมไม่ใช่จำนวนเคสไม่ซ้ำ", card)
+        self.assertNotIn("combined-donut", card)
         self.assertNotIn("share.toFixed", card)
         self.assertNotIn("rate(profile.combined_rate)", card)
 

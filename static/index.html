@@ -28,6 +28,13 @@
       <section id="dashboard" data-route-section="dashboard" class="route-section summary-section" aria-label="Dashboard ผลการดำเนินงาน">
         <div class="summary-heading"><div><p class="eyebrow">YTD SUMMARY</p><h2 id="ytdTitle">ผลการดำเนินงานสะสมปี</h2></div><p class="muted">Complaint และ Rework อ้างอิง Complaint Log · QC Fail อ้างอิง Job Data</p></div>
         <div id="ytdMetrics" class="metrics metrics--kpi"></div>
+        <div id="dashboardRates" class="dashboard-rates" aria-label="อัตราสะสม"></div>
+        <article class="panel combo-panel" aria-labelledby="comboTitle">
+          <div class="combo-heading"><div><p class="eyebrow">MONTHLY PERFORMANCE</p><h2 id="comboTitle">ปริมาณงานและแนวโน้ม Rework</h2><p class="muted">แท่งสีน้ำเงิน = Jobs จากวันติดตั้ง · เส้นสีเหลือง = Rework จากวันรับเรื่อง · แกนคนละหน่วย</p></div><div class="combo-legend"><span><i class="combo-legend__bar"></i>Jobs · งาน</span><span><i class="combo-legend__line"></i>Rework · เคส</span></div></div>
+          <div id="dashboardChart" class="combo-chart" role="img" aria-label="กราฟ Jobs เป็นแท่งและ Rework เป็นเส้นรายเดือน"></div>
+          <table id="dashboardChartData" class="visually-hidden"><caption>ข้อมูลที่ใช้ในกราฟรายเดือน</caption><thead><tr><th>เดือน</th><th>Jobs</th><th>Rework</th></tr></thead><tbody></tbody></table>
+          <p id="dashboardCoverage" class="combo-coverage muted"></p>
+        </article>
       </section>
       <section id="overview" data-route-section="overview" class="route-section summary-section" hidden aria-label="ภาพรวมการติดตามงาน">
         <div class="summary-heading"><div><p class="eyebrow">OPERATIONAL OVERVIEW</p><h2>งานติดตามที่ต้องปิดด้วยหลักฐาน</h2></div><p class="muted">จำนวนนี้เป็นสถานะการทำงาน ไม่ใช่ตัวชี้วัดผลการดำเนินงาน</p></div>
