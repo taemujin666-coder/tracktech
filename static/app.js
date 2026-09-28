@@ -174,11 +174,11 @@ async function loadWatchlist() {
   document.querySelector('#technicianRows').innerHTML = flagged.map((tech) => `
     <tr><td><a class="tech-link" href="#technician/${encodeURIComponent(tech.technician_id)}">${escapeHtml(tech.technician_id)}</a></td>
     <td><strong>${escapeHtml(tech.technician_name || '—')}</strong><br><small>${escapeHtml(tech.team || tech.vendor_name || '—')}</small></td>
-    <td>${formatNumber.format(tech.jobs)}</td><td>${formatNumber.format(tech.affected_orders)}</td>
+    <td>${formatNumber.format(tech.jobs)}</td>
     <td>${formatNumber.format(tech.complaints)}</td><td>${formatNumber.format(tech.rework)}</td><td>${formatNumber.format(tech.qc_fail)}</td>
-    <td>${tech.combined_rate == null ? 'N/A' : rate(tech.combined_rate)}</td>
+    <td class="combined-rate">${tech.combined_rate == null ? 'N/A' : rate(tech.combined_rate)}</td>
     <td><span class="pill ${escapeHtml(tech.status)}">${tech.status === 'CRITICAL' ? 'T3 Critical' : 'T2 Watchlist'}</span></td>
-    <td class="reason">${escapeHtml(tech.reason)}</td></tr>`).join('') || `<tr><td colspan="10">${data.mode === 'demo' ? 'ยังไม่มีข้อมูล Watchlist รายเดือนในโหมดตัวอย่าง' : 'ไม่มีทีมที่เข้าเกณฑ์ในเดือนนี้'}</td></tr>`;
+    <td class="reason">${escapeHtml(tech.reason)}</td></tr>`).join('') || `<tr><td colspan="9">${data.mode === 'demo' ? 'ยังไม่มีข้อมูล Watchlist รายเดือนในโหมดตัวอย่าง' : 'ไม่มีทีมที่เข้าเกณฑ์ในเดือนนี้'}</td></tr>`;
 }
 
 function countCard(label, value, unit, detail, tone = '') {
@@ -412,7 +412,7 @@ async function commitImport() {
 }
 
 function showWatchlistError(error) {
-  document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="10">${escapeHtml(error.message)}</td></tr>`;
+  document.querySelector('#technicianRows').innerHTML = `<tr><td colspan="9">${escapeHtml(error.message)}</td></tr>`;
 }
 
 window.addEventListener('hashchange', setRoute);
