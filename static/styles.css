@@ -93,3 +93,26 @@ button { background:#2d5cf6; } button:hover { background:#2149d9; }
 tbody tr:hover td { background:#f8fafc; }
 @media (max-width:900px) { .metrics--kpi { grid-template-columns:repeat(2,minmax(0,1fr)); }.combo-heading { flex-wrap:wrap; } }
 @media (max-width:520px) { .metrics--kpi { grid-template-columns:1fr; }.combo-panel { padding:18px; }.signal-row { grid-template-columns:74px minmax(0,1fr) 57px; gap:8px; } }
+
+/* Anuphan has a softer Thai shape; keep local fonts available when offline. */
+body { font-family:"Anuphan","Sukhumvit Set",Thonburi,"Noto Sans Thai",system-ui,sans-serif; }
+
+/* Give the Watchlist table enough room for names and explanations without loose rows. */
+#watchlist table { min-width:960px; table-layout:fixed; }
+#watchlist th { padding:9px 8px; font-size:.71rem; font-weight:700; line-height:1.3; letter-spacing:.01em; }
+#watchlist td { padding:10px 8px; font-size:.8rem; line-height:1.4; overflow-wrap:break-word; }
+#watchlist td small { font-size:.71rem; line-height:1.3; }
+#watchlist th:nth-child(1) { width:8%; }
+#watchlist th:nth-child(2) { width:15%; }
+#watchlist th:nth-child(3) { width:6%; }
+#watchlist th:nth-child(4) { width:9%; }
+#watchlist th:nth-child(5) { width:8%; }
+#watchlist th:nth-child(6) { width:8%; }
+#watchlist th:nth-child(7) { width:11%; }
+#watchlist th:nth-child(8) { width:10%; }
+#watchlist th:nth-child(9) { width:25%; }
+#watchlist td:nth-child(2) strong { font-weight:600; }
+#watchlist td.reason { max-width:none; font-size:.76rem; line-height:1.48; }
+#watchlist .tech-link { font-weight:700; }
+#watchlist td.combined-rate { font-size:.88rem; }
+#watchlist .pill { padding:4px 7px; font-size:.66rem; white-space:nowrap; }
