@@ -202,7 +202,7 @@ TECHNICIAN_JOBS_QUERY = """
 
 
 TECHNICIAN_CASES_QUERY = """
-    SELECT c.job_no, project.project_name, c.completed_date, c.complaint_date,
+    SELECT c.case_record_id, c.job_no, project.project_name, c.completed_date, c.complaint_date,
            c.issue_category, c.issue_detail, c.qc_result, c.root_cause_status,
            c.root_cause_type, c.root_cause_detail, c.immediate_action,
            c.preventive_action, c.rework, c.service_mind, c.owner_name,

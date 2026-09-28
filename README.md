@@ -72,6 +72,30 @@ The monthly tier identifies teams to follow up. Technician profiles and the YTD
 dashboard continue to show cumulative history. Confirmed Root Cause and Action
 Level remain separate decisions based on case evidence.
 
+### Technician Performance Review and Follow-up
+
+Run `python -m app.infrastructure.migrations` after pulling the version that adds
+`0005_technician_reviews.sql`. In live mode, open a technician profile from the
+Watchlist. The **Technician Performance Review** section lets Operations select
+an existing verified Complaint Log case, document the investigation and agreed
+measure, set an owner and review date, and choose a number of future jobs to
+monitor. The Review ID links to a separate Follow-up page. Investigation edits
+and Follow-up corrections retain their previous values in audit tables.
+
+Follow-up Order No. must exist in Job Data for the same verified Tech ID and
+cannot predate the investigation. QC is read from Job Data; if its rows disagree
+or lack a result, QC is pending. A monitored job passes only when the checklist,
+evidence and QC are complete, Rework and recurrence are both explicitly absent,
+and an evidence reference is entered. Closing requires all monitored jobs to
+pass and the agreed job count to be met. An operator can escalate with a written
+reason at any point. The names in the acknowledgement section are recorded by
+OPS and are **not electronic signatures**. No attachment upload or user login is
+provided by this iteration; evidence is referenced by internal ID or link.
+
+Review records are operational data separate from the Complaint Log and existing
+monthly Watchlist/KPI calculations. Re-importing Excel does not replace reviews
+or follow-up entries. The existing Dashboard and Watchlist stay unchanged.
+
 ```bash
 python -m unittest discover -s tests -v
 ```

@@ -7,6 +7,7 @@ const formatDate = (value) => value ? evidenceDate.format(new Date(`${value}T00:
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 let previewedFile = null;
 let loadedTechnicianId = null;
+let loadedReviewId = null;
 
 const routes = {
   dashboard: {
@@ -34,13 +35,19 @@ const routes = {
     title: 'ข้อมูลรายช่าง',
     description: 'สรุปผลงานและตรวจสอบประวัติงานรายช่างจากหลักฐานต้นทาง',
   },
+  review: {
+    eyebrow: 'TECHNICIAN PERFORMANCE REVIEW',
+    title: 'ทบทวนคุณภาพงานช่าง',
+    description: 'ข้อเท็จจริง มาตรการ และผลติดตามงานหลัง Investigation',
+  },
 };
 
 function setRoute() {
   const requestedRoute = window.location.hash.slice(1);
   const technicianMatch = requestedRoute.match(/^technician\/([^/]+)$/);
-  const route = technicianMatch ? 'technician' : (routes[requestedRoute] ? requestedRoute : 'dashboard');
-  if (!requestedRoute || (route !== 'technician' && route !== requestedRoute)) history.replaceState(null, '', `#${route}`);
+  const reviewMatch = requestedRoute.match(/^review\/([a-fA-F0-9-]{36})$/);
+  const route = technicianMatch ? 'technician' : reviewMatch ? 'review' : (routes[requestedRoute] ? requestedRoute : 'dashboard');
+  if (!requestedRoute || (!['technician','review'].includes(route) && route !== requestedRoute)) history.replaceState(null, '', `#${route}`);
   const meta = routes[route];
   document.querySelector('#pageEyebrow').textContent = meta.eyebrow;
   document.querySelector('#pageTitle').textContent = meta.title;
@@ -49,11 +56,15 @@ function setRoute() {
     section.hidden = section.dataset.routeSection !== route;
   });
   document.querySelectorAll('nav a[data-route]').forEach((link) => {
-    link.classList.toggle('active', link.dataset.route === (route === 'technician' ? 'watchlist' : route));
+    link.classList.toggle('active', link.dataset.route === (['technician','review'].includes(route) ? 'watchlist' : route));
   });
   if (technicianMatch) {
     const technicianId = decodeURIComponent(technicianMatch[1]);
     if (technicianId !== loadedTechnicianId) loadTechnicianProfile(technicianId).catch(showProfileError);
+  }
+  if (reviewMatch) {
+    loadedTechnicianId = null;
+    if (reviewMatch[1] !== loadedReviewId) loadReview(reviewMatch[1]).catch(showReviewError);
   }
 }
 
@@ -311,12 +322,24 @@ function renderTechnicianProfile(data) {
       <div class="section-title"><div><p class="eyebrow">CASE HISTORY</p><h2>ประวัติเคสที่ผูกกับช่างแล้ว</h2></div><span class="count-label">${formatNumber.format(data.history_summary.case_records)} เคส</span></div>
       <div class="table-wrap profile-table"><table class="case-history-table"><thead><tr><th>Job No.</th><th>Project</th><th>วันที่รับเรื่อง</th><th>วันที่แก้ไข</th><th>ประเภทปัญหา</th><th>รายละเอียดปัญหา</th><th>Rework</th><th>Root Cause</th><th>สถานะ</th><th>Action</th></tr></thead><tbody>${caseRows || '<tr><td colspan="10">ไม่พบประวัติเคส</td></tr>'}</tbody></table></div>
     </section>
+    <section class="panel technician-review-panel">
+      <div class="section-title"><div><p class="eyebrow">TECHNICIAN PERFORMANCE REVIEW</p><h2>ทบทวนคุณภาพงานและติดตามมาตรการ</h2></div>
+        <button type="button" id="newReviewToggle">+ สร้าง Review</button></div>
+      <p class="muted">ผูกกับเคสที่ตรวจสอบ Tech ID แล้ว · ผลทบทวนและ Follow-up แยกจากคะแนน KPI</p>
+      <div id="technicianReviewList" aria-live="polite">กำลังโหลดประวัติ Review…</div>
+      <div id="newReviewArea" hidden></div>
+    </section>
     <section class="panel review-panel">
       <div class="section-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>เคสที่ยังไม่นับเข้าคะแนน</h2></div><span class="count-label">${formatNumber.format(data.history_summary.review_cases)} เคส</span></div>
       <p class="muted">เคสที่ Tech ID ขัดกับ Job Data หรือยังหา Job No. ไม่พบ จะแสดงแยกไว้ทบทวน; Root Cause และ Action Level จะยังไม่สรุปจากเคสเหล่านี้</p>
       ${reviewRows ? `<div class="table-wrap profile-table"><table><thead><tr><th>Job No.</th><th>Complaint Date</th><th>ประเภทปัญหา</th><th>เหตุผลพักตรวจ</th><th>สถานะ</th></tr></thead><tbody>${reviewRows}</tbody></table></div>` : '<div class="empty-state">ไม่มีเคสที่ต้องพักตรวจสำหรับช่างรายนี้</div>'}
     </section>`;
   bindJobHistorySearch(jobs);
+  bindReviewCreation(profile, data.cases || []);
+  loadReviewList(profile.technician_id).catch((error) => {
+    const target = document.querySelector('#technicianReviewList');
+    if (target) target.textContent = error.message;
+  });
 }
 
 async function loadTechnicianProfile(technicianId) {
@@ -334,6 +357,257 @@ async function loadTechnicianProfile(technicianId) {
 function showProfileError(error) {
   loadedTechnicianId = null;
   document.querySelector('#technicianProfile').innerHTML = `<a class="back-link" href="#watchlist">← กลับไป Watchlist</a><div class="panel empty-state">${escapeHtml(error.message)}</div>`;
+}
+
+async function reviewRequest(url, options = {}) {
+  const response = await fetch(url, options);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = body.detail;
+    throw new Error(typeof detail === 'string' ? detail : 'บันทึกข้อมูลไม่สำเร็จ กรุณาตรวจข้อมูลและลองอีกครั้ง');
+  }
+  return body;
+}
+
+function reviewFormBody(form) {
+  return Object.fromEntries(new FormData(form).entries());
+}
+
+function reviewOptions(cases) {
+  return cases.filter((item) => item.case_record_id).map((item) =>
+    `<option value="${escapeHtml(item.case_record_id)}">${escapeHtml(item.job_no)} · ${formatDate(item.complaint_date)} · ${escapeHtml(item.issue_category || 'ไม่ระบุประเภท')}</option>`).join('');
+}
+
+function bindReviewCreation(profile, cases) {
+  const toggle = document.querySelector('#newReviewToggle');
+  const area = document.querySelector('#newReviewArea');
+  if (!cases.some((item) => item.case_record_id)) {
+    toggle.disabled = true;
+    toggle.title = 'ยังไม่มีเคสที่ยืนยัน Tech ID สำหรับเปิด Review';
+    return;
+  }
+  toggle.addEventListener('click', () => {
+    area.hidden = !area.hidden;
+    if (area.hidden || area.children.length) return;
+    const today = new Date().toLocaleDateString('sv-SE');
+    const recommended = profile.action_level?.level;
+    area.innerHTML = `<form id="createReviewForm" class="review-form">
+      <div class="form-head"><h3>01 · ข้อมูลเคสและข้อเท็จจริง</h3><span>ช่อง * จำเป็นต้องกรอก</span></div>
+      <label>เคส / Order No. *<select name="case_record_id" id="reviewCase" required><option value="">เลือกเคสที่ผูกกับช่าง</option>${reviewOptions(cases)}</select></label>
+      <label>วันที่ Investigation *<input name="investigation_date" type="date" value="${today}" required></label>
+      <label>วันที่แจ้ง LSP<input name="notification_date" type="date" value="${today}"></label>
+      <div id="reviewSource" class="review-source">เลือกเคสเพื่อดูประเด็นต้นทาง</div>
+      <label class="span-2">ข้อเท็จจริง / ประเด็นที่พบ *<textarea name="findings" required rows="3" maxlength="6000"></textarea></label>
+      <label>สาเหตุที่ตรวจสอบได้<input name="root_cause" maxlength="250" placeholder="ระบุเมื่อสอบสวนแล้ว"></label>
+      <label>หลักฐานอ้างอิง<input name="evidence_reference" maxlength="3000" placeholder="เลขเคส / ลิงก์หลักฐานภายใน"></label>
+      <label>เคสที่เกี่ยวข้อง<input name="related_cases" maxlength="2000" placeholder="เลขออเดอร์หรือเคสเดิม"></label>
+      <label>คำชี้แจงช่าง<input name="technician_statement" maxlength="3000"></label>
+      <div class="form-head span-2"><h3>02 · มาตรการและรอบติดตาม</h3></div>
+      <label class="span-2">มาตรการที่ตกลงร่วมกัน *<textarea name="agreed_action" required rows="3" maxlength="6000" placeholder="ระบุงานที่ต้องทำและหลักฐานที่ต้องส่ง"></textarea></label>
+      <label>เจ้าของมาตรการ *<input name="action_owner" required maxlength="250"></label>
+      <label>ผู้ตรวจ OPS *<input name="ops_reviewer" required maxlength="250"></label>
+      <label>Action Level ที่ OPS ยืนยัน<select name="action_level"><option value="">ยังไม่สรุประดับ</option>${[1,2,3,4].map((n) => `<option value="${n}">Level ${n}</option>`).join('')}</select></label>
+      <label>ติดตามงานถัดไปกี่งาน *<input name="monitoring_target_jobs" type="number" min="1" max="100" value="5" required></label>
+      <label>วันทบทวนผล *<input name="review_date" type="date" required></label>
+      <div class="form-head span-2"><h3>03 · ผู้รับทราบ</h3><span>บันทึกชื่อผู้รับทราบ ไม่ใช่ลายเซ็นอิเล็กทรอนิกส์</span></div>
+      <label>LSP Manager<input name="vendor_manager" maxlength="250"></label>
+      <label>LSP Admin<input name="vendor_admin" maxlength="250"></label>
+      <label>ช่างเทคนิคผู้รับทราบ<input name="technician_acknowledged_by" maxlength="250"></label>
+      <div class="span-2 form-actions"><button type="submit">บันทึก Investigation</button><span id="createReviewStatus" role="status"></span></div>
+    </form>`;
+    const form = area.querySelector('form');
+    const select = form.querySelector('#reviewCase');
+    select.addEventListener('change', () => {
+      const item = cases.find((row) => row.case_record_id === select.value);
+      form.querySelector('#reviewSource').textContent = item
+        ? `${item.issue_category || 'ไม่ระบุประเภท'} · ${item.issue_detail || 'ไม่มีรายละเอียดปัญหา'} · Root Cause: ${item.root_cause_type || 'รอตรวจสอบ'}`
+        : 'เลือกเคสเพื่อดูประเด็นต้นทาง';
+      form.elements.root_cause.value = item?.root_cause_status?.toLowerCase() === 'confirmed' ? (item.root_cause_type || '') : '';
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = form.querySelector('#createReviewStatus');
+      const button = form.querySelector('button[type="submit"]');
+      const payload = reviewFormBody(form);
+      payload.notification_date = payload.notification_date || null;
+      payload.monitoring_target_jobs = Number(payload.monitoring_target_jobs);
+      payload.action_level = payload.action_level ? Number(payload.action_level) : null;
+      button.disabled = true;
+      status.textContent = 'กำลังบันทึก…';
+      try {
+        const review = await reviewRequest(`/api/technicians/${encodeURIComponent(profile.technician_id)}/reviews`, {
+          method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+        });
+        loadedReviewId = null;
+        location.hash = `#review/${review.review_id}`;
+      } catch (error) { status.textContent = error.message; button.disabled = false; }
+    });
+  });
+}
+
+async function loadReviewList(technicianId) {
+  const data = await reviewRequest(`/api/technicians/${encodeURIComponent(technicianId)}/reviews`);
+  const target = document.querySelector('#technicianReviewList');
+  if (!target || location.hash !== `#technician/${encodeURIComponent(technicianId)}`) return;
+  target.innerHTML = data.mode === 'demo'
+    ? '<p class="muted">เปิดฐานข้อมูลจริงเพื่อบันทึก Investigation</p>'
+    : data.reviews.length ? `<div class="table-wrap"><table class="review-list-table"><thead><tr><th>Investigation</th><th>Order</th><th>มาตรการ</th><th>ติดตาม</th><th>วันทบทวน</th><th>สถานะ</th></tr></thead><tbody>${data.reviews.map((item) => `<tr>
+       <td><a class="tech-link" href="#review/${escapeHtml(item.review_id)}">${escapeHtml(item.review_id.slice(0,8).toUpperCase())}</a></td>
+       <td>${escapeHtml(item.job_no)}</td><td>${escapeHtml(item.agreed_action)}</td>
+       <td>${item.followed_jobs}/${item.monitoring_target_jobs} งาน · ผ่าน ${item.passed_jobs}</td>
+       <td>${formatDate(item.review_date)}</td><td><span class="pill review-${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted">ยังไม่มี Technician Performance Review ของช่างรายนี้</p>';
+  if (data.mode === 'demo') document.querySelector('#newReviewToggle').disabled = true;
+}
+
+function followupValue(value) { return value === true ? 'Yes' : value === false ? 'No' : 'รอตรวจ'; }
+
+function reviewEditMarkup(review) {
+  const input = (field, label, required = false) => `<label>${label}${required ? ' *' : ''}<input name="${field}" value="${escapeHtml(review[field] || '')}" ${required ? 'required' : ''}></label>`;
+  const textarea = (field, label, required = false) => `<label class="span-2">${label}${required ? ' *' : ''}<textarea name="${field}" rows="3" ${required ? 'required' : ''}>${escapeHtml(review[field] || '')}</textarea></label>`;
+  return `<form id="editReviewForm" class="review-form">
+    <div class="form-head span-2"><h3>แก้ไขแบบบันทึก Investigation</h3><span>บันทึกประวัติก่อนและหลังแก้ไข</span></div>
+    ${textarea('findings','ข้อเท็จจริง',true)}
+    <label>วันที่แจ้ง LSP<input name="notification_date" type="date" value="${escapeHtml(review.notification_date || '')}"></label>
+    ${input('root_cause','สาเหตุที่ตรวจสอบได้')}
+    ${input('evidence_reference','หลักฐานอ้างอิง')}
+    ${input('related_cases','เคสที่เกี่ยวข้อง')}
+    ${input('technician_statement','คำชี้แจงช่าง')}
+    ${textarea('agreed_action','มาตรการ',true)}
+    ${input('action_owner','เจ้าของมาตรการ',true)}
+    ${input('ops_reviewer','ผู้ตรวจ OPS',true)}
+    <label>Action Level<select name="action_level"><option value="">ยังไม่สรุป</option>${[1,2,3,4].map((n) => `<option value="${n}" ${review.action_level === n ? 'selected' : ''}>Level ${n}</option>`).join('')}</select></label>
+    <label>ติดตามงานถัดไปกี่งาน *<input name="monitoring_target_jobs" type="number" min="1" max="100" value="${review.monitoring_target_jobs}" required></label>
+    <label>วันทบทวน *<input name="review_date" type="date" value="${escapeHtml(review.review_date)}" required></label>
+    ${input('vendor_manager','LSP Manager')}${input('vendor_admin','LSP Admin')}
+    ${input('technician_acknowledged_by','ช่างเทคนิคผู้รับทราบ')}
+    <label>ผู้แก้ไขข้อมูล *<input name="edited_by" required></label>
+    <div class="span-2 form-actions"><button type="submit">บันทึกการแก้ไข</button><span id="reviewEditStatus" role="status"></span></div>
+  </form>`;
+}
+
+function renderReviewDetail(review) {
+  const target = document.querySelector('#reviewDetail');
+  const editable = review.status === 'MONITORING';
+  const rows = review.followups.map((row) => `<tr><td>${escapeHtml(row.job_no)}</td><td>${formatDate(row.job_date)}</td>
+    <td>${escapeHtml(row.checklist_status)}</td><td>${escapeHtml(row.evidence_status)}</td>
+    <td>${escapeHtml(row.qc_result)}</td><td>${followupValue(row.rework)}</td><td>${followupValue(row.same_issue)}</td>
+    <td>${escapeHtml(row.reviewer)}</td><td>${escapeHtml(row.evidence_reference || '—')}</td>
+    <td><span class="pill ${row.result === 'PASS' ? 'NORMAL' : 'WATCHLIST'}">${row.result === 'PASS' ? 'ผ่าน' : 'ติดตามต่อ'}</span></td>
+    ${editable ? `<td><button type="button" class="followup-edit" data-followup-id="${escapeHtml(row.followup_id)}">แก้ไข</button></td>` : ''}</tr>`).join('');
+  document.querySelector('#pageTitle').textContent = `Review · ${review.technician_name || review.technician_id}`;
+  document.querySelector('#pageDescription').textContent = `Tech ID ${review.technician_id} · เคส ${review.case_job_no} · เปิดสอบสวน ${formatDate(review.investigation_date)}`;
+  target.innerHTML = `<a class="back-link" href="#technician/${encodeURIComponent(review.technician_id)}">← กลับไปโปรไฟล์ช่าง</a>
+    <section class="panel review-overview">
+      <div class="section-title"><div><p class="eyebrow">INVESTIGATION · ${escapeHtml(review.review_id.slice(0,8).toUpperCase())}</p><h2>แบบบันทึกทบทวนคุณภาพงานช่าง</h2></div>
+        <span class="pill review-${escapeHtml(review.status)}">${escapeHtml(review.status)}</span></div>
+      <div class="review-facts"><div><small>Order / วันที่รับเรื่อง</small><strong>${escapeHtml(review.case_job_no)} · ${formatDate(review.complaint_date)}</strong></div>
+        <div><small>Issue Category</small><strong>${escapeHtml(review.issue_category)}</strong></div>
+        <div><small>Root Cause ที่บันทึก</small><strong>${escapeHtml(review.root_cause || 'ยังไม่สรุป')}</strong></div>
+        <div><small>Action Level</small><strong>${review.action_level ? `Level ${review.action_level}` : 'ยังไม่สรุป'}</strong></div>
+        <div><small>ผู้ตรวจ OPS / เจ้าของมาตรการ</small><strong>${escapeHtml(review.ops_reviewer)} / ${escapeHtml(review.action_owner)}</strong></div>
+        <div><small>วันทบทวนผล</small><strong>${formatDate(review.review_date)}</strong></div></div>
+      <p class="muted review-ack">วันที่แจ้ง LSP: ${formatDate(review.notification_date)} · วันที่เปิด Investigation: ${formatDate(review.investigation_date)}</p>
+      <p class="muted review-ack">ปริมาณงานในเดือนที่รับเรื่อง ${review.period_month ? formatDate(review.period_month) : 'ไม่พบ Complaint Date'}: ${review.period_jobs == null ? 'ไม่มี Job Data ช่วงนั้นให้ยืนยัน' : `${formatNumber.format(review.period_jobs)} งาน`}</p>
+      <div class="review-notes"><div><h3>ประเด็นและข้อเท็จจริง</h3><p>${escapeHtml(review.findings)}</p></div>
+        <div><h3>มาตรการที่ตกลงร่วมกัน</h3><p>${escapeHtml(review.agreed_action)}</p></div>
+        <div><h3>หลักฐานอ้างอิง</h3><p>${escapeHtml(review.evidence_reference || 'ยังไม่ระบุ')}</p></div>
+        <div><h3>เคสที่เกี่ยวข้อง / คำชี้แจงช่าง</h3><p>${escapeHtml(review.related_cases || '—')} · ${escapeHtml(review.technician_statement || '—')}</p></div></div>
+      <p class="muted review-ack">ผู้รับทราบที่บันทึก: LSP Manager ${escapeHtml(review.vendor_manager || '—')} · LSP Admin ${escapeHtml(review.vendor_admin || '—')} · ช่าง ${escapeHtml(review.technician_acknowledged_by || '—')} (ข้อมูลนี้ไม่ใช่ลายเซ็นอิเล็กทรอนิกส์)</p>
+      ${(review.edit_history || []).length ? `<p class="muted review-ack">แก้ไขแบบบันทึก ${review.edit_history.length} ครั้ง · ล่าสุดโดย ${escapeHtml(review.edit_history[0].edited_by)}</p>` : ''}
+      ${editable ? `<button type="button" id="editReviewToggle" class="button-secondary">แก้ไขแบบบันทึก</button><div id="editReviewArea" hidden>${reviewEditMarkup(review)}</div>` : ''}
+    </section>
+    <section class="panel"><div class="section-title"><div><p class="eyebrow">FOLLOW-UP</p><h2>ติดตาม ${review.followups.length} / ${review.monitoring_target_jobs} งานถัดไป</h2></div><span class="count-label">ผ่าน ${review.followups.filter((row) => row.result === 'PASS').length} งาน</span></div>
+      <div class="table-wrap"><table class="review-followup-table"><thead><tr><th>Order No.</th><th>วันที่งาน</th><th>Checklist</th><th>Evidence</th><th>QC จาก Job Data</th><th>Rework</th><th>ปัญหาเดิม</th><th>ผู้ตรวจ</th><th>หลักฐานอ้างอิง</th><th>ผล</th>${editable ? '<th></th>' : ''}</tr></thead><tbody>${rows || `<tr><td colspan="${editable ? 11 : 10}">ยังไม่มีงานติดตาม</td></tr>`}</tbody></table></div>
+      ${editable ? `<form id="followupForm" class="review-form">
+        <div class="form-head span-2"><h3>เพิ่มงานที่ติดตาม</h3><span>QC ดึงจาก Job Data · ไม่พบหลักฐานจะยังไม่ผ่าน</span></div>
+        <label>Order No. *<input name="job_no" required placeholder="เลขออเดอร์ของช่างคนนี้"></label>
+        <label>Checklist *<select name="checklist_status"><option value="NOT_CHECKED">ยังไม่ตรวจ</option><option value="COMPLETE">ครบ</option><option value="INCOMPLETE">ไม่ครบ</option></select></label>
+        <label>หลักฐานงาน *<select name="evidence_status"><option value="NOT_CHECKED">ยังไม่ตรวจ</option><option value="COMPLETE">ครบ</option><option value="MISSING">ขาดหลักฐาน</option></select></label>
+        <label>Rework<select name="rework"><option value="">รอตรวจ</option><option value="false">ไม่มี</option><option value="true">มี</option></select></label>
+        <label>ปัญหาเดิมเกิดซ้ำ<select name="same_issue"><option value="">รอตรวจ</option><option value="false">ไม่มี</option><option value="true">เกิดซ้ำ</option></select></label>
+        <label>ผู้ตรวจ *<input name="reviewer" required></label>
+        <label class="span-2">หลักฐานอ้างอิง<input name="evidence_reference" placeholder="เลขเคสหรือที่เก็บภาพงานจริง" maxlength="3000"></label>
+        <label class="span-2">หมายเหตุ<input name="note" maxlength="3000"></label>
+        <div class="span-2 form-actions"><button type="submit">บันทึกผล Follow-up</button><button id="cancelFollowupEdit" type="button" class="button-secondary" hidden>ยกเลิกแก้ไข</button><span role="status" id="followupStatus"></span></div>
+      </form>` : ''}
+    </section>
+    <section class="panel"><div class="section-title"><div><p class="eyebrow">REVIEW DECISION</p><h2>ผลทบทวน</h2></div></div>
+      ${editable ? `<p class="muted">ปิดได้เมื่อติดตามครบ ${review.monitoring_target_jobs} งานและทุกงานผ่าน หากยังพบปัญหาให้ยกระดับพร้อมเหตุผล</p>
+        <form id="reviewDecisionForm" class="review-form"><label>ผลการทบทวน *<select name="status"><option value="CLOSED" ${review.can_close ? '' : 'disabled'}>ปิด · มาตรการได้ผล</option><option value="ESCALATED">ยกระดับ · ต้องแก้ไขต่อ</option></select></label>
+        <label>ผู้สรุปผล *<input name="decided_by" required></label>
+        <label class="span-2">เหตุผลและหลักฐานประกอบ *<textarea name="note" rows="3" required maxlength="4000"></textarea></label>
+        <div class="span-2 form-actions"><button type="submit">บันทึกผลทบทวน</button><span role="status" id="decisionStatus"></span></div></form>`
+      : `<p><strong>${review.status === 'CLOSED' ? 'ปิดรายการแล้ว' : 'ยกระดับแล้ว'}</strong> · ${escapeHtml(review.decision_note || '—')}</p><p class="muted">บันทึกโดย ${escapeHtml(review.decided_by || '—')}</p>`}
+    </section>`;
+  const followupForm = target.querySelector('#followupForm');
+  target.querySelectorAll('.followup-edit').forEach((button) => button.addEventListener('click', () => {
+    const row = review.followups.find((item) => item.followup_id === button.dataset.followupId);
+    if (!row || !followupForm) return;
+    followupForm.dataset.followupId = row.followup_id;
+    for (const key of ['job_no','checklist_status','evidence_status','reviewer','evidence_reference','note']) {
+      followupForm.elements[key].value = row[key] ?? '';
+    }
+    for (const key of ['rework','same_issue']) followupForm.elements[key].value = row[key] == null ? '' : String(row[key]);
+    followupForm.querySelector('button[type="submit"]').textContent = 'บันทึกการแก้ไข';
+    followupForm.querySelector('#cancelFollowupEdit').hidden = false;
+    followupForm.scrollIntoView({behavior:'smooth',block:'center'});
+  }));
+  followupForm?.querySelector('#cancelFollowupEdit').addEventListener('click', () => {
+    followupForm.reset();
+    delete followupForm.dataset.followupId;
+    followupForm.querySelector('button[type="submit"]').textContent = 'บันทึกผล Follow-up';
+    followupForm.querySelector('#cancelFollowupEdit').hidden = true;
+  });
+  followupForm?.addEventListener('submit', (event) => submitReviewForm(event, review.review_id,
+    `/followups${followupForm.dataset.followupId ? `/${followupForm.dataset.followupId}` : ''}`, 'followupStatus', (payload) => {
+    for (const key of ['rework','same_issue']) payload[key] = payload[key] === '' ? null : payload[key] === 'true';
+    return payload;
+  }, followupForm.dataset.followupId ? 'PUT' : 'POST'));
+  target.querySelector('#reviewDecisionForm')?.addEventListener('submit', (event) =>
+    submitReviewForm(event, review.review_id, '/decision', 'decisionStatus', (payload) => payload));
+  target.querySelector('#editReviewToggle')?.addEventListener('click', () => {
+    const area = target.querySelector('#editReviewArea');
+    area.hidden = !area.hidden;
+  });
+  target.querySelector('#editReviewForm')?.addEventListener('submit', (event) => submitReviewForm(
+    event, review.review_id, '', 'reviewEditStatus', (payload) => {
+      payload.monitoring_target_jobs = Number(payload.monitoring_target_jobs);
+      payload.action_level = payload.action_level ? Number(payload.action_level) : null;
+      payload.notification_date = payload.notification_date || null;
+      return payload;
+    }, 'PUT'));
+}
+
+async function submitReviewForm(event, reviewId, endpoint, statusId, transform, method = 'POST') {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const status = form.querySelector(`#${statusId}`);
+  button.disabled = true;
+  status.textContent = 'กำลังบันทึก…';
+  try {
+    const review = await reviewRequest(`/api/reviews/${reviewId}${endpoint}`, {
+      method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(transform(reviewFormBody(form))),
+    });
+    renderReviewDetail(review);
+  } catch (error) { status.textContent = error.message; button.disabled = false; }
+}
+
+async function loadReview(reviewId) {
+  const target = document.querySelector('#reviewDetail');
+  target.className = 'profile-loading';
+  target.textContent = 'กำลังโหลดรายการทบทวน…';
+  const review = await reviewRequest(`/api/reviews/${encodeURIComponent(reviewId)}`);
+  if (location.hash !== `#review/${reviewId}`) return;
+  loadedReviewId = reviewId;
+  target.className = '';
+  renderReviewDetail(review);
+}
+
+function showReviewError(error) {
+  loadedReviewId = null;
+  document.querySelector('#reviewDetail').innerHTML = `<div class="panel empty-state">${escapeHtml(error.message)}</div>`;
 }
 
 function previewMarkup(data) {

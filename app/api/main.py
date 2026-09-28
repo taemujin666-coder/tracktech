@@ -5,11 +5,14 @@ import tempfile
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
+from typing import Literal
+from uuid import UUID
 from zipfile import BadZipFile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from openpyxl.utils.exceptions import InvalidFileException
+from pydantic import BaseModel, Field
 
 from app.application.technician_case_insights import build_technician_case_insights
 from app.application.demo_data import dashboard_demo
@@ -17,6 +20,9 @@ from app.application.import_contract import validate_workbook
 from app.application.workbook_import import preview_workbook
 from app.infrastructure.postgres_import_repository import PostgresImportRepository
 from app.infrastructure.postgres_reader import PostgresPerformanceReader
+from app.infrastructure.technician_review_repository import (
+    ReviewConflict, ReviewInvalid, ReviewNotFound, TechnicianReviewRepository,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = APP_ROOT / "static"
@@ -91,6 +97,133 @@ def technician_profile(technician_id: str) -> dict:
         if match:
             return {"mode": "live", **match}
     raise HTTPException(status_code=404, detail="Technician not found")
+
+
+class ReviewCreate(BaseModel):
+    case_record_id: UUID
+    investigation_date: date
+    notification_date: date | None = None
+    root_cause: str | None = Field(default=None, max_length=250)
+    findings: str = Field(min_length=1, max_length=6000)
+    evidence_reference: str | None = Field(default=None, max_length=3000)
+    related_cases: str | None = Field(default=None, max_length=2000)
+    technician_statement: str | None = Field(default=None, max_length=3000)
+    agreed_action: str = Field(min_length=1, max_length=6000)
+    action_owner: str = Field(min_length=1, max_length=250)
+    ops_reviewer: str = Field(min_length=1, max_length=250)
+    vendor_manager: str | None = Field(default=None, max_length=250)
+    vendor_admin: str | None = Field(default=None, max_length=250)
+    technician_acknowledged_by: str | None = Field(default=None, max_length=250)
+    action_level: int | None = Field(default=None, ge=1, le=4)
+    monitoring_target_jobs: int = Field(default=5, ge=1, le=100)
+    review_date: date
+
+
+class FollowupCreate(BaseModel):
+    job_no: str = Field(min_length=1, max_length=150)
+    checklist_status: Literal["COMPLETE", "INCOMPLETE", "NOT_CHECKED"]
+    evidence_status: Literal["COMPLETE", "MISSING", "NOT_CHECKED"]
+    rework: bool | None = None
+    same_issue: bool | None = None
+    reviewer: str = Field(min_length=1, max_length=250)
+    evidence_reference: str | None = Field(default=None, max_length=3000)
+    note: str | None = Field(default=None, max_length=3000)
+
+
+class ReviewEdit(BaseModel):
+    notification_date: date | None = None
+    root_cause: str | None = Field(default=None, max_length=250)
+    findings: str = Field(min_length=1, max_length=6000)
+    evidence_reference: str | None = Field(default=None, max_length=3000)
+    related_cases: str | None = Field(default=None, max_length=2000)
+    technician_statement: str | None = Field(default=None, max_length=3000)
+    agreed_action: str = Field(min_length=1, max_length=6000)
+    action_owner: str = Field(min_length=1, max_length=250)
+    ops_reviewer: str = Field(min_length=1, max_length=250)
+    vendor_manager: str | None = Field(default=None, max_length=250)
+    vendor_admin: str | None = Field(default=None, max_length=250)
+    technician_acknowledged_by: str | None = Field(default=None, max_length=250)
+    action_level: int | None = Field(default=None, ge=1, le=4)
+    monitoring_target_jobs: int = Field(ge=1, le=100)
+    review_date: date
+    edited_by: str = Field(min_length=1, max_length=250)
+
+
+class ReviewDecision(BaseModel):
+    status: Literal["CLOSED", "ESCALATED"]
+    note: str = Field(min_length=1, max_length=4000)
+    decided_by: str = Field(min_length=1, max_length=250)
+
+
+def _review_repository() -> TechnicianReviewRepository:
+    if os.getenv("TRACKTECH_DEMO_MODE", "true").casefold() == "true":
+        raise HTTPException(status_code=409, detail="เปิดโหมดฐานข้อมูลจริงก่อนบันทึก Technician Review")
+    return TechnicianReviewRepository()
+
+
+def _review_error(error: Exception) -> HTTPException:
+    code = 404 if isinstance(error, ReviewNotFound) else 409 if isinstance(error, ReviewConflict) else 422
+    return HTTPException(status_code=code, detail=str(error))
+
+
+@app.get("/api/technicians/{technician_id}/reviews")
+def technician_reviews(technician_id: str) -> dict:
+    if os.getenv("TRACKTECH_DEMO_MODE", "true").casefold() == "true":
+        return {"reviews": [], "mode": "demo"}
+    try:
+        return {"reviews": _review_repository().list_for_technician(technician_id), "mode": "live"}
+    except ReviewNotFound as error:
+        raise _review_error(error) from error
+
+
+@app.post("/api/technicians/{technician_id}/reviews", status_code=201)
+def create_technician_review(technician_id: str, review: ReviewCreate) -> dict:
+    if review.review_date < review.investigation_date:
+        raise HTTPException(status_code=422, detail="วันทบทวนต้องไม่ก่อนวัน Investigation")
+    try:
+        return _review_repository().create(technician_id, review.model_dump())
+    except (ReviewNotFound, ReviewInvalid) as error:
+        raise _review_error(error) from error
+
+
+@app.get("/api/reviews/{review_id}")
+def technician_review(review_id: UUID) -> dict:
+    try:
+        return _review_repository().get(review_id)
+    except ReviewNotFound as error:
+        raise _review_error(error) from error
+
+
+@app.put("/api/reviews/{review_id}")
+def update_technician_review(review_id: UUID, review: ReviewEdit) -> dict:
+    try:
+        return _review_repository().update_review(review_id, review.model_dump())
+    except (ReviewNotFound, ReviewInvalid, ReviewConflict) as error:
+        raise _review_error(error) from error
+
+
+@app.post("/api/reviews/{review_id}/followups", status_code=201)
+def add_technician_followup(review_id: UUID, followup: FollowupCreate) -> dict:
+    try:
+        return _review_repository().add_followup(review_id, followup.model_dump())
+    except (ReviewNotFound, ReviewInvalid, ReviewConflict) as error:
+        raise _review_error(error) from error
+
+
+@app.put("/api/reviews/{review_id}/followups/{followup_id}")
+def update_technician_followup(review_id: UUID, followup_id: UUID, followup: FollowupCreate) -> dict:
+    try:
+        return _review_repository().update_followup(review_id, followup_id, followup.model_dump())
+    except (ReviewNotFound, ReviewInvalid, ReviewConflict) as error:
+        raise _review_error(error) from error
+
+
+@app.post("/api/reviews/{review_id}/decision")
+def decide_technician_review(review_id: UUID, decision: ReviewDecision) -> dict:
+    try:
+        return _review_repository().decide(review_id, **decision.model_dump())
+    except (ReviewNotFound, ReviewInvalid, ReviewConflict) as error:
+        raise _review_error(error) from error
 
 
 @contextmanager
